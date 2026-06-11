@@ -70,4 +70,45 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate",
+            "description": (
+                "Evaluate a basic arithmetic expression (e.g. percentages, growth, "
+                "unit conversions) when the answer needs a precise number."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Arithmetic expression, e.g. '(120-90)/90*100'.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this calculation is needed.",
+                    },
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "now",
+            "description": "Get the current date and time (useful for 'latest', 'today', age, recency).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why the current date/time is needed.",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
 ]

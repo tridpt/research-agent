@@ -65,6 +65,10 @@ def render_step_vi(event) -> str:
             return f"📖 Đang đọc nguồn: {detail.get('url', '')}"
         if action == "finish":
             return "✅ Đã đủ thông tin — bắt đầu viết báo cáo"
+        if action == "calculate":
+            return f"🧮 Đang tính toán: {detail.get('expression', '')}"
+        if action == "now":
+            return "🗓️ Đang lấy ngày giờ hiện tại"
         if action == "plan":
             subs = detail.get("sub_questions", "")
             return "🧩 Lập kế hoạch, chia thành các câu hỏi nhỏ:\n   • " + subs.replace(" | ", "\n   • ")

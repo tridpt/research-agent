@@ -19,6 +19,8 @@ class ActionType(Enum):
     SEARCH = "search"
     READ = "read"
     FINISH = "finish"
+    CALCULATE = "calculate"
+    NOW = "now"
 
 
 class TransitionKind(Enum):
@@ -91,6 +93,7 @@ class AgentDecision:
     reasoning: str = ""
     query: str | None = None
     url: str | None = None
+    expression: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,3 +154,4 @@ class SessionState:
     last_decision: AgentDecision | None = None
     invalid_decision_streak: int = 0
     failed_urls: set[str] = field(default_factory=set)
+    tool_notes: list[str] = field(default_factory=list)

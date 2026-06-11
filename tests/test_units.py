@@ -76,6 +76,21 @@ def test_parse_decision_unknown_action() -> None:
     assert isinstance(parse_decision({"action": "fly"}), InvalidDecision)
 
 
+def test_parse_decision_calculate() -> None:
+    d = parse_decision({"action": "calculate", "expression": "1+1"})
+    assert isinstance(d, AgentDecision)
+    assert d.action is ActionType.CALCULATE and d.expression == "1+1"
+
+
+def test_parse_decision_calculate_missing_expr() -> None:
+    assert isinstance(parse_decision({"action": "calculate"}), InvalidDecision)
+
+
+def test_parse_decision_now() -> None:
+    d = parse_decision({"action": "now"})
+    assert isinstance(d, AgentDecision) and d.action is ActionType.NOW
+
+
 # ---- tool-call recovery from malformed output (Groq/Llama quirk) ----
 def test_recover_from_function_tag() -> None:
     from research_agent.llm import _recover_from_failed_generation
@@ -272,6 +287,35 @@ def test_run_session_continues_on_empty_search() -> None:
         emit=lambda e: None,
     )
     assert report.no_information is True  # no sources collected
+
+
+def test_run_session_uses_calculate_tool() -> None:
+    # The agent calls calculate, then finishes; the tool note is passed to synth.
+    captured = {}
+
+    def capturing_synth(q, srcs, llm):
+        captured["question"] = q
+        return synthesize(q, srcs, llm)
+
+    llm = ScriptedLLM(
+        decisions=[
+            {"action": "calculate", "expression": "(120-90)/90*100"},
+            {"action": "finish"},
+        ]
+    )
+    run_session(
+        question="growth rate?",
+        settings=_settings(),
+        llm=llm,
+        search=FakeSearch(SearchOutcome(results=())),
+        fetch=FakeFetch(),
+        synthesize_fn=capturing_synth,
+        clock=lambda: 0.0,
+        emit=lambda e: None,
+    )
+    # The calculated result is included in the question handed to synthesis.
+    assert "calculate((120-90)/90*100)" in captured["question"]
+    assert "33.3" in captured["question"]
 
 
 # ---- Synthesizer (R6.1, R6.5) ----

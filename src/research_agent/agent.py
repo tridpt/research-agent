@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
+from .calculator import CalculatorError, calculate_str, now_str
 from .content import host_of, wrap_untrusted
 from .decision import parse_decision
 from .fetch_tool import FetchTool
@@ -105,6 +106,7 @@ def build_messages(
     search_results: Sequence[SearchResult] = (),
     search_history: Sequence[str] = (),
     directive: str | None = None,
+    tool_notes: Sequence[str] = (),
 ) -> list[Message]:
     """Pure: assemble the message list for the next decision.
 
@@ -112,7 +114,8 @@ def build_messages(
     trusted content. All web-derived content (search results and source text)
     appears only inside wrap_untrusted blocks, never as instructions (Property 4).
     An optional ``directive`` (e.g. reflection follow-up gaps) is added as a
-    trusted instruction to steer the next round.
+    trusted instruction to steer the next round. ``tool_notes`` carries trusted
+    results from local tools (calculator, current datetime).
     """
     messages = [
         Message(role="system", content=SYSTEM_PROMPT),
@@ -120,6 +123,10 @@ def build_messages(
     ]
     if directive:
         messages.append(Message(role="user", content=directive))
+    if tool_notes:
+        messages.append(
+            Message(role="user", content="Tool results so far:\n" + "\n".join(tool_notes))
+        )
     if search_history:
         messages.append(
             Message(role="user", content="Queries already tried: " + "; ".join(search_history))
@@ -262,11 +269,30 @@ def run_session(
             else:
                 state.failed_urls.add(target)
                 emit(_error_event(state, fetch_outcome.error or "fetch error"))
+        elif decision.action is ActionType.CALCULATE:
+            emit(_action_event(state, decision))
+            try:
+                result = calculate_str(decision.expression or "")
+                note = f"calculate({decision.expression}) = {result}"
+                state.tool_notes.append(note)
+            except CalculatorError as exc:
+                emit(_error_event(state, f"calculate error: {exc}"))
+        elif decision.action is ActionType.NOW:
+            emit(_action_event(state, decision))
+            state.tool_notes.append(f"current datetime = {now_str(clock)}")
 
         state.rounds_used += 1
         emit(_round_event(state))
 
-    return synthesize_fn(question, state.sources, llm)
+    synth_question = question
+    if state.tool_notes:
+        synth_question = (
+            question
+            + "\n\n[Tool results to incorporate where relevant: "
+            + "; ".join(state.tool_notes)
+            + "]"
+        )
+    return synthesize_fn(synth_question, state.sources, llm)
 
 
 def _next_valid_decision(
@@ -287,6 +313,7 @@ def _next_valid_decision(
                 state.search_results,
                 state.search_history,
                 directive,
+                state.tool_notes,
             ),
             TOOLS,
         )
@@ -345,6 +372,8 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["query"] = decision.query
     if decision.url:
         detail["url"] = decision.url
+    if decision.expression:
+        detail["expression"] = decision.expression
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,

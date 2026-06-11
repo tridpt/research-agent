@@ -43,5 +43,14 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
             return InvalidDecision(reason="READ requires a non-empty 'url'")
         return AgentDecision(action=action, url=url.strip(), reasoning=reasoning)
 
+    if action is ActionType.CALCULATE:
+        expr = raw.get("expression")
+        if not isinstance(expr, str) or not expr.strip():
+            return InvalidDecision(reason="CALCULATE requires a non-empty 'expression'")
+        return AgentDecision(action=action, expression=expr.strip(), reasoning=reasoning)
+
+    if action is ActionType.NOW:
+        return AgentDecision(action=ActionType.NOW, reasoning=reasoning)
+
     # FINISH needs no extra parameters.
     return AgentDecision(action=ActionType.FINISH, reasoning=reasoning)

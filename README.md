@@ -41,6 +41,15 @@ reason about.
 - **Smart retry/backoff**: honors a provider `Retry-After` header on 429/503,
   otherwise uses capped exponential backoff.
 
+### Agent tools
+The agent chooses among these tools on each step via native function-calling:
+- **search** — run a web search.
+- **read** — fetch and read a source URL.
+- **calculate** — evaluate a safe arithmetic expression (no `eval`; AST-based,
+  allow-listed operators) for precise numbers in the report.
+- **now** — get the current date/time (for "latest"/"today"/recency questions).
+- **finish** — stop and synthesize the cited report.
+
 ### Agent modes
 - **Native tool-calling**: the model selects actions via real function-calling
   (not JSON-mode prompting), which is more reliable. The provider also recovers
