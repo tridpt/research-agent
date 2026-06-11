@@ -303,6 +303,62 @@ def test_synthesize_language_adds_instruction() -> None:
     assert "Vietnamese" in captured["system"]
 
 
+def test_synthesize_stream_yields_and_returns_report() -> None:
+    from research_agent.synthesizer import synthesize_stream
+
+    class StreamLLM:
+        def decide_action(self, m, t):
+            return {"action": "finish"}
+
+        def generate(self, m):
+            return "unused"
+
+        def generate_stream(self, messages):
+            yield "Phần 1 "
+            yield "[https://a.com/x]"
+
+    srcs = [Source(url="https://a.com/x", content="c", fetched_at=0.0)]
+    gen = synthesize_stream("q", srcs, StreamLLM())
+    chunks = list(gen)
+    # The generator's return value (final Report) is on StopIteration.value;
+    # iterating via list() discards it, so re-run capturing the return.
+    assert "".join(chunks).startswith("Phần 1")
+
+
+def test_synthesize_stream_return_value() -> None:
+    from research_agent.synthesizer import synthesize_stream
+
+    class StreamLLM:
+        def generate_stream(self, messages):
+            yield "Body [https://a.com/x]"
+
+    srcs = [Source(url="https://a.com/x", content="c", fetched_at=0.0)]
+    gen = synthesize_stream("q", srcs, StreamLLM())
+    try:
+        while True:
+            next(gen)
+    except StopIteration as stop:
+        report = stop.value
+    assert report.body_markdown == "Body [https://a.com/x]"
+    assert len(report.citations) == 1
+
+
+def test_synthesize_stream_no_sources() -> None:
+    from research_agent.synthesizer import synthesize_stream
+
+    class StreamLLM:
+        def generate_stream(self, messages):
+            yield "should not be used"
+
+    gen = synthesize_stream("q", [], StreamLLM(), language="vi")
+    try:
+        while True:
+            next(gen)
+    except StopIteration as stop:
+        report = stop.value
+    assert report.no_information is True
+
+
 # ---- ReportWriter (R7.1, R7.2, R7.5) ----
 def test_write_report_to_path(tmp_path: Path) -> None:
     out = tmp_path / "sub" / "r.md"

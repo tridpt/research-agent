@@ -38,7 +38,7 @@ from research_agent.config import resolve_settings  # noqa: E402
 from research_agent.errors import ConfigError, LLMError  # noqa: E402
 from research_agent.fetch_tool import HttpFetchTool  # noqa: E402
 from research_agent.llm import Message, OpenAICompatibleProvider  # noqa: E402
-from research_agent.models import TraceEventType  # noqa: E402
+from research_agent.models import Report, TraceEventType  # noqa: E402
 from research_agent.multi_agent import run_multi_agent  # noqa: E402
 from research_agent.observability import CollectingEmitter  # noqa: E402
 from research_agent.reflection import run_with_reflection  # noqa: E402
@@ -49,7 +49,7 @@ from research_agent.search_tool import (  # noqa: E402
     FallbackSearchTool,
     TavilySearchTool,
 )
-from research_agent.synthesizer import synthesize  # noqa: E402
+from research_agent.synthesizer import synthesize, synthesize_stream  # noqa: E402
 from research_agent.usage import UsageTracker, format_usage  # noqa: E402
 
 
@@ -277,12 +277,23 @@ if run_clicked:
         synth_fn = partial(synthesize, language=lang_code) if lang_code else synthesize
 
         started = time.time()
+        report = None
+        stream_in_normal = mode.startswith("Thường")
+
         with st.status("Đang nghiên cứu...", expanded=True) as status:
             try:
                 if mode.startswith("Đa agent"):
                     report = run_multi_agent(question, settings, llm, search, fetch, synth_fn, time.time, emit)
                 elif mode.startswith("Tự đánh giá"):
                     report = run_with_reflection(question, settings, llm, search, fetch, synth_fn, time.time, emit)
+                elif stream_in_normal:
+                    # Normal mode: gather sources first (no synthesis), so we can
+                    # stream the report text afterwards.
+                    def _collect_only(_q, _srcs, _llm):
+                        return Report(question=_q, body_markdown="", sources=tuple(_srcs))
+
+                    pre = run_session(question, settings, llm, search, fetch, _collect_only, time.time, emit)
+                    gathered = list(pre.sources)
                 else:
                     report = run_session(question, settings, llm, search, fetch, synth_fn, time.time, emit)
                 status.update(label="Hoàn tất!", state="complete")
@@ -290,6 +301,33 @@ if run_clicked:
                 status.update(label="Lỗi", state="error")
                 st.error(f"Lỗi gọi mô hình: {exc}")
                 st.stop()
+
+        # Stream the report body live for normal mode (into a temporary area
+        # that is cleared afterwards, so the final formatted report below is the
+        # single source of truth).
+        if stream_in_normal:
+            st.subheader("📄 Báo cáo (đang viết...)")
+            stream_area = st.empty()
+            gen = synthesize_stream(question, gathered, llm, language=lang_code)
+
+            def _text_stream():
+                nonlocal report
+                try:
+                    while True:
+                        yield next(gen)
+                except StopIteration as stop:
+                    report = stop.value
+
+            try:
+                with stream_area.container():
+                    st.write_stream(_text_stream())
+            except LLMError as exc:
+                st.error(f"Lỗi gọi mô hình: {exc}")
+                st.stop()
+            if report is None:
+                report = synthesize(question, gathered, llm, language=lang_code)
+            stream_area.empty()
+
         elapsed = time.time() - started
 
         markdown = render_markdown(report)

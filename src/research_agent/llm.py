@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -282,3 +282,49 @@ class OpenAICompatibleProvider:
     def generate(self, messages: Sequence[Message]) -> str:
         data = self._chat(messages)
         return data["choices"][0]["message"]["content"]
+
+    def generate_stream(self, messages: Sequence[Message]) -> Iterator[str]:
+        """Yield text chunks as they arrive (Server-Sent Events streaming).
+
+        Falls back to a single chunk if the server doesn't support streaming.
+        Usage totals are recorded if the final chunk includes a usage block.
+        """
+        payload = {
+            "model": self._model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "stream": True,
+        }
+        try:
+            with self._client.stream("POST", "/chat/completions", json=payload) as resp:
+                if resp.status_code >= 400:
+                    body = resp.read().decode("utf-8", "replace")
+                    if is_transient_status(resp.status_code):
+                        hint = parse_retry_after(resp.headers.get("Retry-After")) or \
+                            parse_retry_after_from_body(body)
+                        raise TransientLLMError(
+                            f"LLM transient HTTP {resp.status_code}", retry_after=hint
+                        )
+                    raise LLMError(f"LLM HTTP {resp.status_code}: {body[:500]}")
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    if self._usage is not None and chunk.get("usage"):
+                        self._usage.record(chunk.get("usage"))
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    piece = delta.get("content")
+                    if piece:
+                        yield piece
+        except self._httpx.TimeoutException as exc:
+            raise TransientLLMError(f"LLM request timed out: {exc}") from exc
+        except self._httpx.HTTPError as exc:
+            raise TransientLLMError(f"LLM connection error: {exc}") from exc
