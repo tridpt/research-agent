@@ -309,14 +309,14 @@ if run_clicked:
             st.subheader("📄 Báo cáo (đang viết...)")
             stream_area = st.empty()
             gen = synthesize_stream(question, gathered, llm, language=lang_code)
+            _result = {}
 
             def _text_stream():
-                nonlocal report
                 try:
                     while True:
                         yield next(gen)
                 except StopIteration as stop:
-                    report = stop.value
+                    _result["report"] = stop.value
 
             try:
                 with stream_area.container():
@@ -324,8 +324,7 @@ if run_clicked:
             except LLMError as exc:
                 st.error(f"Lỗi gọi mô hình: {exc}")
                 st.stop()
-            if report is None:
-                report = synthesize(question, gathered, llm, language=lang_code)
+            report = _result.get("report") or synthesize(question, gathered, llm, language=lang_code)
             stream_area.empty()
 
         elapsed = time.time() - started
