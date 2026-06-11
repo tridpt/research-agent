@@ -7,6 +7,7 @@ actual I/O-bound loop.
 """
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
 
 from .calculator import CalculatorError, calculate_str, now_str
@@ -171,20 +172,27 @@ def run_session(
     emit: Callable[[TraceEvent], None],
     initial_state: SessionState | None = None,
     directive: str | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Report:
     """Drive the multi-step agent loop and return the synthesized Report.
 
     ``initial_state`` lets a caller (e.g. the reflection loop) continue research
     from previously collected sources. ``directive`` injects an extra trusted
-    instruction (e.g. gaps to address) into each decision prompt.
+    instruction (e.g. gaps to address) into each decision prompt. A configured
+    ``settings.round_delay_seconds`` paces rounds to respect provider rate limits.
     """
     state = initial_state or SessionState(question=question, started_at=clock())
     budget = settings.budget
+    delay = getattr(settings, "round_delay_seconds", 0.0) or 0.0
 
     while True:
         transition = decide_transition(state, budget, clock())
         if transition.kind is TransitionKind.SYNTHESIZE:
             break
+
+        # Pace requests to avoid hitting tokens-per-minute / rate limits.
+        if delay > 0 and state.rounds_used > 0:
+            sleep(delay)
 
         decision = _next_valid_decision(llm, state, settings.max_llm_attempts, emit, directive)
 

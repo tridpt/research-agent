@@ -289,6 +289,35 @@ def test_run_session_continues_on_empty_search() -> None:
     assert report.no_information is True  # no sources collected
 
 
+def test_run_session_paces_with_delay() -> None:
+    # With a configured round delay, the injectable sleep is called between rounds.
+    sleeps: list[float] = []
+    llm = ScriptedLLM(
+        decisions=[
+            {"action": "search", "query": "x"},
+            {"action": "read", "url": "https://a.com/1"},
+            {"action": "finish"},
+        ]
+    )
+    settings = resolve_settings(
+        env={ENV_API_KEY: "k"},
+        cli_overrides={"max_rounds": 5, "max_sources": 5, "min_domains": 1, "round_delay_seconds": 2.0},
+    )
+    run_session(
+        question="q",
+        settings=settings,
+        llm=llm,
+        search=FakeSearch(SearchOutcome(results=())),
+        fetch=FakeFetch(),
+        synthesize_fn=synthesize,
+        clock=lambda: 0.0,
+        emit=lambda e: None,
+        sleep=sleeps.append,
+    )
+    # At least one inter-round pause of the configured length happened.
+    assert sleeps and all(s == 2.0 for s in sleeps)
+
+
 def test_run_session_uses_calculate_tool() -> None:
     # The agent calls calculate, then finishes; the tool note is passed to synth.
     captured = {}

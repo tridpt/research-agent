@@ -30,6 +30,7 @@ ENV_MIN_DOMAINS = "RESEARCH_AGENT_MIN_DOMAINS"
 ENV_MAX_PER_DOMAIN = "RESEARCH_AGENT_MAX_PER_DOMAIN"
 ENV_CACHE_DIR = "RESEARCH_AGENT_CACHE_DIR"
 ENV_CACHE_TTL = "RESEARCH_AGENT_CACHE_TTL"
+ENV_ROUND_DELAY = "RESEARCH_AGENT_ROUND_DELAY"
 
 # Maps an optional setting key -> the env var that supplies it.
 _ENV_FOR = {
@@ -47,6 +48,7 @@ _ENV_FOR = {
     "max_per_domain": ENV_MAX_PER_DOMAIN,
     "cache_dir": ENV_CACHE_DIR,
     "cache_ttl": ENV_CACHE_TTL,
+    "round_delay_seconds": ENV_ROUND_DELAY,
 }
 
 
@@ -65,6 +67,7 @@ class Defaults:
     min_domains: int = 2
     max_per_domain: int = 2
     cache_ttl: float = 0.0
+    round_delay_seconds: float = 0.0
 
 
 DEFAULTS = Defaults()
@@ -138,6 +141,7 @@ def resolve_settings(
     min_domains = _as_int(_resolve("min_domains", cli_overrides, env), defaults.min_domains)
     max_per_domain = _as_int(_resolve("max_per_domain", cli_overrides, env), defaults.max_per_domain)
     cache_ttl = _as_float(_resolve("cache_ttl", cli_overrides, env), defaults.cache_ttl)
+    round_delay = _as_float(_resolve("round_delay_seconds", cli_overrides, env), defaults.round_delay_seconds)
     cache_raw = _resolve("cache_dir", cli_overrides, env)
     cache_dir = Path(str(cache_raw)) if cache_raw else None
 
@@ -157,4 +161,5 @@ def resolve_settings(
         max_per_domain=max_per_domain,
         cache_dir=cache_dir,
         cache_ttl=cache_ttl,
+        round_delay_seconds=round_delay,
     )

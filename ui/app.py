@@ -197,6 +197,8 @@ with st.sidebar:
     min_domains = st.slider("Số tên miền tối thiểu", 1, 5, 2)
     per_source_chars = st.slider("Ký tự mỗi nguồn", 800, 6000, 2000, step=200,
                                  help="Giảm nếu gặp lỗi 'request too large' trên free tier.")
+    round_delay = st.slider("Độ trễ giữa các vòng (giây)", 0.0, 10.0, 0.0, step=0.5,
+                            help="Tăng lên (vd 3-5s) nếu hay gặp lỗi 429 trên free tier như Groq.")
 
     tavily_key = st.text_input(
         "Tavily API key (tùy chọn)", type="password",
@@ -218,6 +220,7 @@ def _build_settings():
         "max_sources": max_sources,
         "min_domains": min_domains,
         "per_source_char_limit": per_source_chars,
+        "round_delay_seconds": round_delay,
         "verbose": True,
     }
     return resolve_settings(env=dict(os.environ), cli_overrides=overrides)

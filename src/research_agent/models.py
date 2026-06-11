@@ -62,6 +62,9 @@ class Settings:
     # Source-diversity controls.
     min_domains: int = 2          # soft: encourage >= this many distinct domains
     max_per_domain: int = 2       # hard: never collect more than this per domain
+    # Pacing: optional delay (seconds) between agent rounds to respect provider
+    # rate limits (e.g. Groq free tier's tokens-per-minute cap).
+    round_delay_seconds: float = 0.0
     # Fetch cache.
     cache_dir: Path | None = None
     cache_ttl: float = 0.0        # seconds; <=0 means entries never expire
