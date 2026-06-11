@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.env
+.env.local
+research-*.md
+report.md
+report-*.md
+.research_agent_cache/
+.research_agent_history.json

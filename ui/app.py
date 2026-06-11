@@ -1,0 +1,455 @@
+"""Streamlit web UI for research-agent.
+
+Run with:
+    streamlit run ui/app.py
+
+Reuses the existing agent core unchanged; this module is a thin UI layer that
+collects configuration, runs a research session, streams the agent's steps live,
+renders the cited report, supports follow-up chat, source previews, persistent
+history, and HTML/Markdown export.
+"""
+from __future__ import annotations
+
+import os
+import sys
+import time
+from functools import partial
+from pathlib import Path
+
+import streamlit as st
+
+# Make the src/ layout importable without an editable install.
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+# Local UI helpers.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from helpers import (  # noqa: E402
+    add_history_item,
+    load_history,
+    report_to_html,
+    save_history,
+)
+
+from research_agent.agent import run_session  # noqa: E402
+from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
+from research_agent.config import resolve_settings  # noqa: E402
+from research_agent.errors import ConfigError, LLMError  # noqa: E402
+from research_agent.fetch_tool import HttpFetchTool  # noqa: E402
+from research_agent.llm import Message, OpenAICompatibleProvider  # noqa: E402
+from research_agent.models import TraceEventType  # noqa: E402
+from research_agent.multi_agent import run_multi_agent  # noqa: E402
+from research_agent.observability import CollectingEmitter  # noqa: E402
+from research_agent.reflection import run_with_reflection  # noqa: E402
+from research_agent.render import render_markdown  # noqa: E402
+from research_agent.retry import RetryingLLMProvider  # noqa: E402
+from research_agent.search_tool import (  # noqa: E402
+    DuckDuckGoSearchTool,
+    FallbackSearchTool,
+    TavilySearchTool,
+)
+from research_agent.synthesizer import synthesize  # noqa: E402
+from research_agent.usage import UsageTracker, format_usage  # noqa: E402
+
+
+def render_step_vi(event) -> str:
+    """Mô tả một bước của agent bằng tiếng Việt, thân thiện với người dùng."""
+    detail = event.detail or {}
+    rnd = event.round_index
+    if event.type is TraceEventType.ACTION_SELECTED:
+        action = detail.get("action", "")
+        if action == "search":
+            return f"🔍 Đang tìm kiếm trên web: “{detail.get('query', '')}”"
+        if action == "read":
+            return f"📖 Đang đọc nguồn: {detail.get('url', '')}"
+        if action == "finish":
+            return "✅ Đã đủ thông tin — bắt đầu viết báo cáo"
+        if action == "plan":
+            subs = detail.get("sub_questions", "")
+            return "🧩 Lập kế hoạch, chia thành các câu hỏi nhỏ:\n   • " + subs.replace(" | ", "\n   • ")
+        return f"⚙️ Hành động: {action}"
+    if event.type is TraceEventType.ROUND_COMPLETED:
+        return f"   ↳ Xong vòng {rnd} · đã thu thập {event.sources_count} nguồn"
+    err = detail.get("error", "")
+    if "already read" in err:
+        return "   ⚠️ Nguồn này đã đọc rồi, bỏ qua"
+    if "domain cap" in err:
+        return "   ⚠️ Đã đủ nguồn từ trang này, chuyển sang trang khác"
+    if "previously failed" in err or "substituting" in err:
+        return "   ↻ Nguồn lỗi, tự chuyển sang nguồn khác"
+    if "fetch" in err or "HTTP" in err or "SSL" in err:
+        return "   ⚠️ Không tải được trang này (có thể bị chặn), thử nguồn khác"
+    if "search" in err:
+        return "   ⚠️ Tìm kiếm không có kết quả, thử lại"
+    return f"   ⚠️ {err}"
+
+
+# Provider presets: label -> (base_url, default_model).
+PRESETS = {
+    "Groq": ("https://api.groq.com/openai/v1", "openai/gpt-oss-20b"),
+    "Gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-2.5-flash-lite"),
+    "OpenAI": ("https://api.openai.com/v1", "gpt-4o-mini"),
+    "Khác (tùy chỉnh)": ("", ""),
+}
+
+st.set_page_config(page_title="Research Agent", page_icon="🔎", layout="wide")
+st.title("🔎 Research Agent")
+st.caption("Trợ lý nghiên cứu tự động: tìm web, đọc nguồn, viết báo cáo có trích dẫn.")
+
+
+# --------------------------------------------------------------------------
+# Persisted config (.env) + persistent history (json)
+# --------------------------------------------------------------------------
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+
+
+def load_env_file() -> dict[str, str]:
+    data: dict[str, str] = {}
+    if ENV_PATH.exists():
+        for raw in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            data[k.strip()] = v.strip()
+    return data
+
+
+def save_env_file(values: dict[str, str]) -> None:
+    current = load_env_file()
+    current.update({k: v for k, v in values.items() if v})
+    lines = [
+        "# Saved by the Research Agent UI. Keep this file private.",
+        *[f"{k}={v}" for k, v in current.items()],
+        "",
+    ]
+    ENV_PATH.write_text("\n".join(lines), encoding="utf-8")
+
+
+_SAVED = load_env_file()
+
+
+def _initial(key: str, default: str = "") -> str:
+    return _SAVED.get(key) or os.environ.get(key, "") or default
+
+
+# Load persistent history once into session state.
+if "history" not in st.session_state:
+    st.session_state["history"] = load_history()
+
+
+# --------------------------------------------------------------------------
+# Sidebar: configuration
+# --------------------------------------------------------------------------
+with st.sidebar:
+    st.header("⚙️ Cấu hình")
+
+    _saved_provider = _SAVED.get("RESEARCH_AGENT_PROVIDER_LABEL", "Groq")
+    _provider_names = list(PRESETS.keys())
+    _provider_index = _provider_names.index(_saved_provider) if _saved_provider in _provider_names else 0
+    provider = st.selectbox("Nhà cung cấp LLM", _provider_names, index=_provider_index)
+    preset_url, preset_model = PRESETS[provider]
+
+    api_key = st.text_input(
+        "API key",
+        type="password",
+        value=_initial("RESEARCH_AGENT_API_KEY"),
+        help="Bấm 'Lưu cấu hình' bên dưới để nhớ lâu dài (ghi vào file .env).",
+    )
+    base_url = st.text_input("Base URL", value=_initial("RESEARCH_AGENT_BASE_URL", preset_url))
+    model = st.text_input("Model", value=_initial("RESEARCH_AGENT_MODEL", preset_model))
+
+    if st.button("💾 Lưu cấu hình", use_container_width=True):
+        save_env_file(
+            {
+                "RESEARCH_AGENT_API_KEY": api_key,
+                "RESEARCH_AGENT_BASE_URL": base_url,
+                "RESEARCH_AGENT_MODEL": model,
+                "RESEARCH_AGENT_PROVIDER_LABEL": provider,
+                "RESEARCH_AGENT_TAVILY_API_KEY": st.session_state.get("tavily_key_val", ""),
+            }
+        )
+        st.success("Đã lưu vào .env — lần sau mở app sẽ tự điền sẵn.")
+
+    st.divider()
+    mode = st.radio(
+        "Chế độ nghiên cứu",
+        ["Thường", "Tự đánh giá (reflect)", "Đa agent (multi-agent)"],
+        help="Reflect: tự chấm điểm và đào sâu. Multi-agent: chia nhỏ câu hỏi.",
+    )
+
+    lang_label = st.radio(
+        "Ngôn ngữ báo cáo",
+        ["Tiếng Việt", "English", "Tự động (theo câu hỏi)"],
+        help="Chọn ngôn ngữ cho báo cáo cuối cùng.",
+    )
+    lang_code = {"Tiếng Việt": "vi", "English": "en"}.get(lang_label)
+
+    st.divider()
+    st.subheader("Giới hạn")
+    max_rounds = st.slider("Số vòng tối đa", 2, 20, 8)
+    max_sources = st.slider("Số nguồn tối đa", 1, 10, 3)
+    min_domains = st.slider("Số tên miền tối thiểu", 1, 5, 2)
+    per_source_chars = st.slider("Ký tự mỗi nguồn", 800, 6000, 2000, step=200,
+                                 help="Giảm nếu gặp lỗi 'request too large' trên free tier.")
+
+    tavily_key = st.text_input(
+        "Tavily API key (tùy chọn)", type="password",
+        value=_initial("RESEARCH_AGENT_TAVILY_API_KEY"),
+        key="tavily_key_val",
+        help="Để trống thì dùng DuckDuckGo miễn phí.",
+    )
+
+
+# --------------------------------------------------------------------------
+# Builders
+# --------------------------------------------------------------------------
+def _build_settings():
+    overrides = {
+        "api_key": api_key,
+        "base_url": base_url,
+        "model": model,
+        "max_rounds": max_rounds,
+        "max_sources": max_sources,
+        "min_domains": min_domains,
+        "per_source_char_limit": per_source_chars,
+        "verbose": True,
+    }
+    return resolve_settings(env=dict(os.environ), cli_overrides=overrides)
+
+
+def _build_search(settings):
+    providers = []
+    if tavily_key:
+        providers.append(TavilySearchTool(api_key=tavily_key, max_results=settings.budget.max_sources))
+    providers.append(DuckDuckGoSearchTool(max_results=settings.budget.max_sources))
+    return FallbackSearchTool(providers)
+
+
+def _build_llm(settings, usage=None):
+    return RetryingLLMProvider(
+        OpenAICompatibleProvider(
+            api_key=settings.api_key, base_url=settings.base_url, model=settings.model, usage=usage
+        ),
+        max_attempts=settings.max_llm_attempts,
+    )
+
+
+# --------------------------------------------------------------------------
+# Main: question + run
+# --------------------------------------------------------------------------
+question = st.text_input("Câu hỏi nghiên cứu của bạn", placeholder="Ví dụ: Sự khác nhau giữa SQL và NoSQL là gì?")
+run_clicked = st.button("🚀 Bắt đầu nghiên cứu", type="primary", use_container_width=True)
+
+if run_clicked:
+    if not question.strip():
+        st.error("Vui lòng nhập câu hỏi.")
+    elif not api_key.strip():
+        st.error("Vui lòng nhập API key ở thanh bên.")
+    else:
+        try:
+            settings = _build_settings()
+        except ConfigError as exc:
+            st.error(f"Lỗi cấu hình: {exc}")
+            st.stop()
+
+        usage_tracker = UsageTracker()
+        llm = _build_llm(settings, usage=usage_tracker)
+        search = _build_search(settings)
+        fetch = CachingFetchTool(
+            HttpFetchTool(
+                blocked_domains=settings.blocked_domains,
+                per_source_char_limit=settings.per_source_char_limit,
+            ),
+            FetchCache(Path(".research_agent_cache"), ttl_seconds=settings.cache_ttl),
+        )
+
+        st.subheader("🧠 Agent đang làm gì")
+        steps_box = st.empty()
+        steps: list[str] = []
+
+        def _on_event(line: str, event) -> None:
+            steps.append(render_step_vi(event))
+            steps_box.markdown("\n\n".join(steps[-25:]))
+
+        emit = CollectingEmitter(verbose=True, on_event=_on_event)
+        synth_fn = partial(synthesize, language=lang_code) if lang_code else synthesize
+
+        started = time.time()
+        with st.status("Đang nghiên cứu...", expanded=True) as status:
+            try:
+                if mode.startswith("Đa agent"):
+                    report = run_multi_agent(question, settings, llm, search, fetch, synth_fn, time.time, emit)
+                elif mode.startswith("Tự đánh giá"):
+                    report = run_with_reflection(question, settings, llm, search, fetch, synth_fn, time.time, emit)
+                else:
+                    report = run_session(question, settings, llm, search, fetch, synth_fn, time.time, emit)
+                status.update(label="Hoàn tất!", state="complete")
+            except LLMError as exc:
+                status.update(label="Lỗi", state="error")
+                st.error(f"Lỗi gọi mô hình: {exc}")
+                st.stop()
+        elapsed = time.time() - started
+
+        markdown = render_markdown(report)
+        # Keep source URL + a content preview for the "source preview" feature.
+        sources = [
+            {"url": s.url, "preview": (s.content or "")[:1500]}
+            for s in report.sources
+        ]
+
+        st.session_state["history"] = add_history_item(
+            st.session_state["history"],
+            question=question,
+            markdown=markdown,
+            sources=sources,
+            elapsed=elapsed,
+            mode=mode,
+            usage=format_usage(usage_tracker, settings.model),
+        )
+        # Remember the latest report for the follow-up chat context.
+        st.session_state["last_report"] = {"question": question, "markdown": markdown}
+        st.session_state["chat"] = []
+
+# --------------------------------------------------------------------------
+# Show the most recent report (if any) with export + source preview + chat
+# --------------------------------------------------------------------------
+history = st.session_state.get("history", [])
+if history:
+    latest = history[0]
+
+    st.subheader("📄 Báo cáo")
+    st.markdown(latest["markdown"])
+
+    st.info(
+        f"⏱️ Thời gian: {latest['elapsed']:.1f} giây  ·  "
+        f"📚 Số nguồn: {len(latest['sources'])}  ·  "
+        f"🔧 Chế độ: {latest['mode']}"
+    )
+    if latest.get("usage"):
+        st.caption(f"🧮 {latest['usage']}")
+
+    # --- Export: Markdown / HTML (HTML printable to PDF) ---
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "⬇️ Tải Markdown (.md)",
+            data=latest["markdown"],
+            file_name="bao-cao.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with c2:
+        st.download_button(
+            "⬇️ Tải HTML (in ra PDF được)",
+            data=report_to_html(latest["question"], latest["markdown"]),
+            file_name="bao-cao.html",
+            mime="text/html",
+            use_container_width=True,
+            help="Mở file HTML rồi dùng 'In → Lưu thành PDF' của trình duyệt.",
+        )
+
+    # --- Source preview: click to expand the text the agent actually read ---
+    st.subheader("📚 Nguồn đã dùng")
+    if not latest["sources"]:
+        st.caption("Không có nguồn nào.")
+    for i, s in enumerate(latest["sources"], 1):
+        with st.expander(f"{i}. {s['url']}"):
+            st.link_button("🔗 Mở trang gốc", s["url"])
+            preview = s.get("preview") or ""
+            if preview:
+                st.caption("Trích đoạn nội dung agent đã đọc:")
+                st.text(preview + ("…" if len(preview) >= 1500 else ""))
+            else:
+                st.caption("(Không có nội dung xem trước.)")
+
+
+    # --- Follow-up chat grounded in the latest report ---
+    st.subheader("💬 Hỏi tiếp về báo cáo")
+    st.caption("Đặt câu hỏi nối tiếp; agent trả lời dựa trên báo cáo và nguồn ở trên.")
+
+    if "chat" not in st.session_state:
+        st.session_state["chat"] = []
+
+    for turn in st.session_state["chat"]:
+        with st.chat_message(turn["role"]):
+            st.markdown(turn["content"])
+
+    follow_up = st.chat_input("Ví dụ: Tóm tắt ngắn gọn trong 3 ý chính giúp tôi")
+    if follow_up:
+        if not api_key.strip():
+            st.error("Vui lòng nhập API key ở thanh bên để hỏi tiếp.")
+        else:
+            st.session_state["chat"].append({"role": "user", "content": follow_up})
+            with st.chat_message("user"):
+                st.markdown(follow_up)
+
+            try:
+                settings = _build_settings()
+                chat_llm = _build_llm(settings)
+            except ConfigError as exc:
+                st.error(f"Lỗi cấu hình: {exc}")
+                st.stop()
+
+            # Build grounded messages: report as context + prior chat turns.
+            lang_note = ""
+            if lang_code == "vi":
+                lang_note = " Trả lời bằng tiếng Việt."
+            elif lang_code == "en":
+                lang_note = " Answer in English."
+            messages = [
+                Message(
+                    role="system",
+                    content=(
+                        "You are a helpful assistant answering follow-up questions about a "
+                        "research report. Base your answers ONLY on the report below; if the "
+                        "report doesn't contain the answer, say so honestly." + lang_note
+                    ),
+                ),
+                Message(role="user", content=f"REPORT:\n{latest['markdown']}"),
+            ]
+            for turn in st.session_state["chat"]:
+                messages.append(Message(role=turn["role"], content=turn["content"]))
+
+            with st.chat_message("assistant"):
+                with st.spinner("Đang trả lời..."):
+                    try:
+                        answer = chat_llm.generate(messages)
+                    except LLMError as exc:
+                        answer = f"Lỗi gọi mô hình: {exc}"
+                st.markdown(answer)
+            st.session_state["chat"].append({"role": "assistant", "content": answer})
+
+
+# --------------------------------------------------------------------------
+# Persistent history (survives app restarts)
+# --------------------------------------------------------------------------
+if history:
+    st.divider()
+    st.subheader("🕘 Lịch sử nghiên cứu")
+    st.caption("Được lưu vào file, vẫn còn sau khi tắt/mở lại app.")
+    if st.button("🗑️ Xóa toàn bộ lịch sử"):
+        st.session_state["history"] = []
+        save_history([])
+        st.rerun()
+
+    for idx, item in enumerate(history):
+        n_src = len(item.get("sources", []))
+        title = (f"[{item['when']}] {item['question']}  ·  {item['mode']}  ·  "
+                 f"{item['elapsed']:.1f}s  ·  {n_src} nguồn")
+        with st.expander(title):
+            st.markdown(item["markdown"])
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.download_button(
+                    "⬇️ Markdown", data=item["markdown"],
+                    file_name=f"bao-cao-{idx+1}.md", mime="text/markdown",
+                    key=f"dl_md_{idx}", use_container_width=True,
+                )
+            with cc2:
+                st.download_button(
+                    "⬇️ HTML", data=report_to_html(item["question"], item["markdown"]),
+                    file_name=f"bao-cao-{idx+1}.html", mime="text/html",
+                    key=f"dl_html_{idx}", use_container_width=True,
+                )
