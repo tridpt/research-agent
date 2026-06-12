@@ -456,6 +456,38 @@ def test_retry_exhausts_then_raises() -> None:
         call_with_retry(always_fail, max_attempts=3, sleep=lambda _t: None, base_delay=0.0)
 
 
+def test_retrying_provider_generate_stream_delegates() -> None:
+    from research_agent.retry import RetryingLLMProvider
+
+    class InnerStream:
+        def decide_action(self, m, t):
+            return {"action": "finish"}
+
+        def generate(self, m):
+            return "full"
+
+        def generate_stream(self, messages):
+            yield "a"
+            yield "b"
+
+    prov = RetryingLLMProvider(InnerStream(), max_attempts=3, sleep=lambda _t: None)
+    assert "".join(prov.generate_stream([])) == "ab"
+
+
+def test_retrying_provider_generate_stream_fallback() -> None:
+    from research_agent.retry import RetryingLLMProvider
+
+    class NoStream:
+        def decide_action(self, m, t):
+            return {"action": "finish"}
+
+        def generate(self, m):
+            return "single-shot"
+
+    prov = RetryingLLMProvider(NoStream(), max_attempts=3, sleep=lambda _t: None)
+    assert "".join(prov.generate_stream([])) == "single-shot"
+
+
 # ---- Observability verbose toggle (R10.3) ----
 def test_verbose_controls_reasoning() -> None:
     event = TraceEvent(

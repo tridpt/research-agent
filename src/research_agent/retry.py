@@ -7,7 +7,7 @@ is an upper bound on the total number of calls.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 from .errors import LLMError
@@ -94,3 +94,29 @@ class RetryingLLMProvider:
             self._max_attempts,
             self._sleep,
         )
+
+    def generate_stream(self, messages: Sequence[Message]) -> Iterator[str]:
+        """Stream text chunks from the inner provider.
+
+        Retries only apply before the first chunk is produced; once streaming
+        has started we don't restart mid-response. Falls back to a single-shot
+        ``generate`` if the inner provider doesn't support streaming.
+        """
+        inner_stream = getattr(self._inner, "generate_stream", None)
+        if inner_stream is None:
+            yield self.generate(messages)
+            return
+
+        def _start() -> Iterator[str]:
+            gen = inner_stream(messages)
+            first = next(gen, None)
+            return _chain(first, gen)
+
+        def _chain(first, gen):
+            if first is not None:
+                yield first
+            yield from gen
+
+        # Retry only the initial connection (until the first chunk).
+        stream = call_with_retry(_start, self._max_attempts, self._sleep)
+        yield from stream
