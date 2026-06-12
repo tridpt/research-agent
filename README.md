@@ -28,7 +28,6 @@ OpenAI-compatible LLM (Groq, Gemini, OpenAI, local Ollama).
 | [HUONG_DAN.md](HUONG_DAN.md) | Hướng dẫn sử dụng chi tiết cho người dùng (Tiếng Việt) |
 | [TAI_LIEU_KY_THUAT.md](TAI_LIEU_KY_THUAT.md) | Tài liệu kỹ thuật: kiến trúc, module, luồng dữ liệu (Tiếng Việt) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (conventions, tests) |
-| [PUSH_GITHUB.md](PUSH_GITHUB.md) | Steps to publish this repo to GitHub |
 
 ## 📸 Screenshots
 
