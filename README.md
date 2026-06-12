@@ -1,12 +1,45 @@
 # research-agent 🔎🤖
 
-An autonomous command-line **AI research agent**. Give it a question; it runs
-multiple rounds of web search, reads sources, decides on its own when it has
-enough, and writes a **cited Markdown report**.
+![CI](https://github.com/tridpt/research-agent/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen)
 
-Built as both a usable tool and a learning project for understanding how AI
-agents work: tool-calling, multi-step reasoning, synthesis, and safe handling
-of untrusted web content.
+**What is it?** An autonomous AI research agent. You ask a question; it searches
+the web over multiple rounds, reads sources, decides on its own when it has
+enough, and writes a **cited Markdown report** — so you can trust and verify it.
+
+**Who is it for?** Anyone who needs to research a topic quickly (students,
+developers, writers), and anyone learning **how AI agents actually work** under
+the hood.
+
+**What problem does it solve?** It turns "spend an hour reading 10 tabs" into
+"ask once, get a grounded, cited summary" — while staying transparent about every
+step it takes.
+
+Runs from the **command line** or a **web UI** (Streamlit). Works with any
+OpenAI-compatible LLM (Groq, Gemini, OpenAI, local Ollama).
+
+## 📚 Documentation
+
+| File | What it covers |
+|---|---|
+| [README.md](README.md) | This file — overview, install, usage (English) |
+| [HUONG_DAN.md](HUONG_DAN.md) | Hướng dẫn sử dụng chi tiết cho người dùng (Tiếng Việt) |
+| [TAI_LIEU_KY_THUAT.md](TAI_LIEU_KY_THUAT.md) | Tài liệu kỹ thuật: kiến trúc, module, luồng dữ liệu (Tiếng Việt) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (conventions, tests) |
+| [PUSH_GITHUB.md](PUSH_GITHUB.md) | Steps to publish this repo to GitHub |
+
+## 📸 Screenshots
+
+The web UI (Streamlit) — configure a provider, ask a question, watch the agent's
+steps in Vietnamese, and read the cited report:
+
+| Home | Researching (live steps) | Cited report |
+|---|---|---|
+| ![Home](docs/screenshots/01-home.png) | ![Running](docs/screenshots/02-running.png) | ![Report](docs/screenshots/03-report.png) |
+
+> The CLI offers the same capabilities (`research-agent "your question" -v`).
 
 ## How it works
 
@@ -128,6 +161,12 @@ streamlit run ui/app.py          # or: .\run-ui.ps1
 Then open http://localhost:8501. Pick a provider, paste your API key, choose a
 mode (normal / reflect / multi-agent), enter a question, and watch the agent's
 steps live before the cited report appears.
+
+> **Live demo:** there is no static demo link because this is a Python app
+> (not a static site), so it can't run on GitHub Pages. To share it online, deploy
+> to [Streamlit Community Cloud](https://streamlit.io/cloud) (users still supply
+> their own API key). Locally it runs in any modern browser (Chrome, Edge,
+> Firefox, Safari).
 
 Examples:
 
