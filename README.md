@@ -34,6 +34,8 @@ OpenAI-compatible LLM (Groq, Gemini, OpenAI, local Ollama).
 The web UI (Streamlit) — configure a provider, ask a question, watch the agent's
 steps in Vietnamese, and read the cited report:
 
+![Demo](docs/screenshots/demo.gif)
+
 | Home | Researching (live steps) | Cited report |
 |---|---|---|
 | ![Home](docs/screenshots/01-home.png) | ![Running](docs/screenshots/02-running.png) | ![Report](docs/screenshots/03-report.png) |
@@ -236,3 +238,19 @@ src/research_agent/
 ├── observability.py  # render_trace (pure) + TraceEmitter
 └── report_writer.py  # write_report
 ```
+
+## Roadmap
+
+Ideas for future versions (contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)):
+
+- [ ] More agent tools (read local PDFs, fetch current weather/stock data)
+- [ ] Source-credibility ranking (prefer gov/edu/established domains)
+- [ ] Long-term memory across sessions (reference past research)
+- [ ] Direct PDF export (currently via HTML → print)
+- [ ] Side-by-side model comparison in the web UI
+- [ ] Streamlit Community Cloud deployment for a one-click live demo
+- [ ] Automated quality evaluation across modes (built on `evaluate.py`)
+
+## License
+
+[MIT](LICENSE)

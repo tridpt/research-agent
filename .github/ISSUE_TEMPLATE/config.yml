@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation (Tiếng Việt)
+    url: https://github.com/tridpt/research-agent/blob/main/HUONG_DAN.md
+    about: Hướng dẫn sử dụng chi tiết trước khi mở issue.
+  - name: Technical documentation
+    url: https://github.com/tridpt/research-agent/blob/main/TAI_LIEU_KY_THUAT.md
+    about: Kiến trúc và chi tiết kỹ thuật.
