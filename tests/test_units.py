@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -392,6 +393,55 @@ def test_run_session_rejects_unapproved_read_and_pdf_actions() -> None:
     errors = [event.detail.get("error", "") for event in events]
     assert any("not returned by the search tool" in error for error in errors)
     assert any("read_pdf blocked" in error for error in errors)
+
+
+def test_run_session_turns_approved_pdf_into_a_citable_source(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """An approved PDF is cited safely rather than passed only as a tool note."""
+    selected_pdf = tmp_path / "project brief.pdf"
+    selected_pdf.write_bytes(b"%PDF-1.4\n")
+
+    class FakePage:
+        def extract_text(self) -> str:
+            return "The approved document says the launch is on Friday."
+
+    class FakePdfReader:
+        pages = [FakePage(), FakePage()]
+
+    monkeypatch.setattr("research_agent.agent.PdfReader", lambda _path: FakePdfReader())
+    captured: dict[str, object] = {}
+
+    def capturing_synth(question, sources, llm, tool_notes):
+        captured["sources"] = list(sources)
+        captured["tool_notes"] = list(tool_notes)
+        return synthesize(question, sources, llm, tool_notes)
+
+    llm = ScriptedLLM(
+        decisions=[
+            {"action": "read_pdf", "path": str(selected_pdf)},
+            {"action": "finish"},
+        ],
+        text="The launch is on Friday. [1]",
+    )
+    report = run_session(
+        question="When is the launch?",
+        settings=replace(_settings(), allowed_pdf_paths=(selected_pdf,)),
+        llm=llm,
+        search=FakeSearch(),
+        fetch=FakeFetch(),
+        synthesize_fn=capturing_synth,
+        clock=lambda: 0.0,
+        emit=lambda _event: None,
+    )
+
+    source = report.sources[0]
+    assert source.url == "local-pdf://project%20brief.pdf"
+    assert "User-provided PDF: project brief.pdf" in source.content
+    assert "Pages: 2" in source.content
+    assert str(tmp_path) not in source.content
+    assert report.citations[0].url == source.url
+    assert captured["tool_notes"] == ["Read user-provided PDF 'project brief.pdf' (2 pages)."]
 
 
 def test_run_session_uses_weather_tool_as_a_source(monkeypatch) -> None:

@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from .models import SearchResult, Source
 
@@ -37,7 +37,16 @@ class SourceQuality:
 
 def assess_source(url: str, content: str | None = None) -> SourceQuality:
     """Score a source using domain type and available extracted evidence."""
-    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    parsed = urlsplit(url)
+    if parsed.scheme == "local-pdf":
+        score = 90
+        reason = "user-provided PDF document"
+        if content is not None and len(re.sub(r"\s+", "", content)) >= 600:
+            score = 100
+            reason += "; substantial extracted evidence"
+        return SourceQuality(score=score, label="high", reason=reason)
+
+    host = (parsed.hostname or "").lower().rstrip(".")
     labels = host.split(".") if host else []
     score = 50
     reasons: list[str] = []
@@ -89,3 +98,17 @@ def rank_search_results(results: Sequence[SearchResult]) -> tuple[SearchResult, 
 def source_quality_summary(source: Source) -> SourceQuality:
     """Convenience wrapper for a fetched source with actual evidence text."""
     return assess_source(source.url, source.content)
+
+
+def is_local_pdf_source(url: str) -> bool:
+    """True when a source identifies an explicitly user-provided PDF."""
+    return urlsplit(url).scheme == "local-pdf"
+
+
+def source_display_name(url: str) -> str:
+    """Return a safe human label without exposing a local temporary path."""
+    parsed = urlsplit(url)
+    if parsed.scheme == "local-pdf":
+        name = unquote(parsed.netloc or parsed.path.lstrip("/")) or "document.pdf"
+        return f"User-provided PDF: {name}"
+    return url

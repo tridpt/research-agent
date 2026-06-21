@@ -340,11 +340,26 @@ def run_session(
                     emit(_round_event(state))
                     continue
                 reader = PdfReader(path)
+                page_count = len(reader.pages)
                 text = "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
                 from .content import truncate_content
+
                 truncated = truncate_content(text, settings.per_source_char_limit)
-                note = f"Content of PDF '{path}':\n{truncated}"
-                state.tool_notes.append(note)
+                pdf_url = f"local-pdf://{quote(path.name, safe='')}"
+                if not any(source.url == pdf_url for source in state.sources):
+                    state.sources.append(
+                        Source(
+                            url=pdf_url,
+                            content=(
+                                f"User-provided PDF: {path.name}\n"
+                                f"Pages: {page_count}\n\n{truncated}"
+                            ),
+                            fetched_at=clock(),
+                        )
+                    )
+                state.tool_notes.append(
+                    f"Read user-provided PDF '{path.name}' ({page_count} pages)."
+                )
             except Exception as exc:
                 emit(_error_event(state, f"read_pdf error: {exc}"))
         elif decision.action is ActionType.GET_WEATHER:

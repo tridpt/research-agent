@@ -51,7 +51,12 @@ from research_agent.search_tool import (  # noqa: E402
     FallbackSearchTool,
     TavilySearchTool,
 )
-from research_agent.source_quality import assess_source, source_quality_summary  # noqa: E402
+from research_agent.source_quality import (  # noqa: E402
+    assess_source,
+    is_local_pdf_source,
+    source_display_name,
+    source_quality_summary,
+)
 from research_agent.synthesizer import synthesize, synthesize_stream  # noqa: E402
 from research_agent.url_safety import public_http_url_error  # noqa: E402
 from research_agent.usage import UsageTracker, format_usage  # noqa: E402
@@ -265,7 +270,10 @@ def _prepare_selected_pdf(uploaded_file):
     if not data.startswith(b"%PDF-"):
         raise ValueError("File đã chọn không phải PDF hợp lệ.")
     temporary_dir = tempfile.TemporaryDirectory(prefix="research-agent-pdf-")
-    path = Path(temporary_dir.name) / "selected.pdf"
+    file_name = Path(getattr(uploaded_file, "name", "selected.pdf")).name
+    if not file_name or file_name == "." or not file_name.lower().endswith(".pdf"):
+        file_name = "selected.pdf"
+    path = Path(temporary_dir.name) / file_name
     path.write_bytes(data)
     return temporary_dir, path
 
@@ -401,6 +409,7 @@ if run_clicked:
         sources = [
             {
                 "url": s.url,
+                "label": source_display_name(s.url),
                 "preview": (s.content or "")[:1500],
                 "quality": source_quality_summary(s).label,
                 "quality_score": str(source_quality_summary(s).score),
@@ -465,13 +474,17 @@ if history:
     if not latest["sources"]:
         st.caption("Không có nguồn nào.")
     for i, s in enumerate(latest["sources"], 1):
+        display_name = s.get("label", source_display_name(s["url"]))
         legacy_quality = assess_source(s["url"], s.get("preview"))
         quality = s.get("quality", legacy_quality.label)
         score = s.get("quality_score", str(legacy_quality.score))
         reason = s.get("quality_reason", legacy_quality.reason)
         quality_label = QUALITY_LABELS_VI.get(quality, "Chưa rõ")
-        with st.expander(f"{i}. {s['url']} · {quality_label} ({score}/100)"):
-            st.link_button("🔗 Mở trang gốc", s["url"])
+        with st.expander(f"{i}. {display_name} · {quality_label} ({score}/100)"):
+            if is_local_pdf_source(s["url"]):
+                st.caption("PDF bạn đã cung cấp; không có trang web gốc.")
+            else:
+                st.link_button("🔗 Mở trang gốc", s["url"])
             if s.get("quality_reason"):
                 st.caption("Đánh giá tự động (tham khảo): " + s["quality_reason"])
             if not s.get("quality_reason") and reason:

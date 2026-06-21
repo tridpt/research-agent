@@ -68,7 +68,9 @@ reason about.
 - Web reads are restricted to search results and public HTTP(S) destinations;
   private, loopback, and link-local networks are blocked, including redirects.
 - Local PDFs are opt-in: the agent can only read a file explicitly selected for
-  the current run with `--pdf` (or the UI file picker).
+  the current run with `--pdf` (or the UI file picker). An approved PDF is
+  listed as a user-provided source by filename and page count; temporary local
+  paths are never included in the report.
 
 ### Efficiency & quality
 - **Persistent fetch cache**: a URL read once is reused from disk across

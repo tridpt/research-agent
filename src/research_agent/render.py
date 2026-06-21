@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .models import Report
-from .source_quality import source_quality_summary
+from .source_quality import is_local_pdf_source, source_display_name, source_quality_summary
 
 
 def render_markdown(report: Report) -> str:
@@ -20,8 +20,13 @@ def render_markdown(report: Report) -> str:
     if report.sources:
         for i, src in enumerate(report.sources, start=1):
             quality = source_quality_summary(src)
+            label = (
+                f"{source_display_name(src.url)} (`{src.url}`)"
+                if is_local_pdf_source(src.url)
+                else f"[{src.url}]({src.url})"
+            )
             lines.append(
-                f"{i}. [{src.url}]({src.url}) — "
+                f"{i}. {label} — "
                 f"Quality: {quality.label} ({quality.score}/100; {quality.reason})"
             )
     else:
