@@ -27,12 +27,14 @@ dependencies = [
     "trafilatura>=1.8",
     "ddgs>=9.0",
     "pypdf>=4.0",
+    "Markdown>=3.7",
+    "bleach>=6.2",
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-username/research-agent"
-Repository = "https://github.com/your-username/research-agent"
-Issues = "https://github.com/your-username/research-agent/issues"
+Homepage = "https://github.com/tridpt/research-agent"
+Repository = "https://github.com/tridpt/research-agent"
+Issues = "https://github.com/tridpt/research-agent/issues"
 
 [project.optional-dependencies]
 dev = [

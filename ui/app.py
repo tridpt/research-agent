@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import time
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 
@@ -38,7 +40,7 @@ from research_agent.config import resolve_settings  # noqa: E402
 from research_agent.errors import ConfigError, LLMError  # noqa: E402
 from research_agent.fetch_tool import HttpFetchTool  # noqa: E402
 from research_agent.llm import Message, OpenAICompatibleProvider  # noqa: E402
-from research_agent.models import Report, TraceEventType  # noqa: E402
+from research_agent.models import Report, SessionState, TraceEventType  # noqa: E402
 from research_agent.multi_agent import run_multi_agent  # noqa: E402
 from research_agent.observability import CollectingEmitter  # noqa: E402
 from research_agent.reflection import run_with_reflection  # noqa: E402
@@ -50,6 +52,7 @@ from research_agent.search_tool import (  # noqa: E402
     TavilySearchTool,
 )
 from research_agent.synthesizer import synthesize, synthesize_stream  # noqa: E402
+from research_agent.url_safety import public_http_url_error  # noqa: E402
 from research_agent.usage import UsageTracker, format_usage  # noqa: E402
 
 
@@ -207,6 +210,12 @@ with st.sidebar:
         help="Để trống thì dùng DuckDuckGo miễn phí.",
     )
 
+    selected_pdf = st.file_uploader(
+        "PDF cho phép agent đọc (tùy chọn)",
+        type=["pdf"],
+        help="Chỉ dùng cho lượt chạy này, tối đa 20 MB; file sẽ bị xóa ngay sau đó.",
+    )
+
 
 # --------------------------------------------------------------------------
 # Builders
@@ -243,6 +252,22 @@ def _build_llm(settings, usage=None):
     )
 
 
+def _prepare_selected_pdf(uploaded_file):
+    """Store one explicitly selected PDF in an isolated temporary directory."""
+    if uploaded_file is None:
+        return None, None
+    max_bytes = 20 * 1024 * 1024
+    data = uploaded_file.getvalue()
+    if len(data) > max_bytes:
+        raise ValueError("PDF lớn hơn giới hạn 20 MB.")
+    if not data.startswith(b"%PDF-"):
+        raise ValueError("File đã chọn không phải PDF hợp lệ.")
+    temporary_dir = tempfile.TemporaryDirectory(prefix="research-agent-pdf-")
+    path = Path(temporary_dir.name) / "selected.pdf"
+    path.write_bytes(data)
+    return temporary_dir, path
+
+
 # --------------------------------------------------------------------------
 # Main: question + run
 # --------------------------------------------------------------------------
@@ -261,6 +286,14 @@ if run_clicked:
             st.error(f"Lỗi cấu hình: {exc}")
             st.stop()
 
+        try:
+            _pdf_temp_dir, approved_pdf_path = _prepare_selected_pdf(selected_pdf)
+        except ValueError as exc:
+            st.error(str(exc))
+            st.stop()
+        if approved_pdf_path is not None:
+            settings = replace(settings, allowed_pdf_paths=(approved_pdf_path,))
+
         usage_tracker = UsageTracker()
         llm = _build_llm(settings, usage=usage_tracker)
         search = _build_search(settings)
@@ -270,6 +303,7 @@ if run_clicked:
                 per_source_char_limit=settings.per_source_char_limit,
             ),
             FetchCache(Path(".research_agent_cache"), ttl_seconds=settings.cache_ttl),
+            url_validator=public_http_url_error,
         )
 
         st.subheader("🧠 Agent đang làm gì")
@@ -296,10 +330,22 @@ if run_clicked:
                 elif stream_in_normal:
                     # Normal mode: gather sources first (no synthesis), so we can
                     # stream the report text afterwards.
-                    def _collect_only(_q, _srcs, _llm):
+                    state = SessionState(question=question, started_at=time.time())
+
+                    def _collect_only(_q, _srcs, _llm, _tool_notes):
                         return Report(question=_q, body_markdown="", sources=tuple(_srcs))
 
-                    pre = run_session(question, settings, llm, search, fetch, _collect_only, time.time, emit)
+                    pre = run_session(
+                        question,
+                        settings,
+                        llm,
+                        search,
+                        fetch,
+                        _collect_only,
+                        time.time,
+                        emit,
+                        initial_state=state,
+                    )
                     gathered = list(pre.sources)
                 else:
                     report = run_session(question, settings, llm, search, fetch, synth_fn, time.time, emit)
@@ -315,7 +361,13 @@ if run_clicked:
         if stream_in_normal:
             st.subheader("📄 Báo cáo (đang viết...)")
             stream_area = st.empty()
-            gen = synthesize_stream(question, gathered, llm, language=lang_code)
+            gen = synthesize_stream(
+                question,
+                gathered,
+                llm,
+                tool_notes=state.tool_notes,
+                language=lang_code,
+            )
             _result = {}
 
             def _text_stream():
@@ -331,7 +383,13 @@ if run_clicked:
             except LLMError as exc:
                 st.error(f"Lỗi gọi mô hình: {exc}")
                 st.stop()
-            report = _result.get("report") or synthesize(question, gathered, llm, language=lang_code)
+            report = _result.get("report") or synthesize(
+                question,
+                gathered,
+                llm,
+                tool_notes=state.tool_notes,
+                language=lang_code,
+            )
             stream_area.empty()
 
         elapsed = time.time() - started

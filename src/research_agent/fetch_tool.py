@@ -12,6 +12,7 @@ from typing import Protocol
 
 from .content import is_blocked, truncate_content
 from .models import Source
+from .url_safety import public_http_url_error
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,8 @@ class HttpFetchTool:
         timeout: float = 30.0,
         extractor: Callable[[str], str] = default_extractor,
         clock: Callable[[], float] = time.time,
+        max_redirects: int = 5,
+        url_validator: Callable[[str], str | None] = public_http_url_error,
     ) -> None:
         import httpx
 
@@ -58,13 +61,15 @@ class HttpFetchTool:
         self._limit = per_source_char_limit
         self._extractor = extractor
         self._clock = clock
+        self._max_redirects = max_redirects
+        self._url_validator = url_validator
         self._client = httpx.Client(
             timeout=timeout,
-            follow_redirects=True,
+            follow_redirects=False,
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (compatible; research-agent/0.1; "
-                    "+https://github.com/your-username/research-agent)"
+                    "+https://github.com/tridpt/research-agent)"
                 ),
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
@@ -72,15 +77,33 @@ class HttpFetchTool:
         self._httpx = httpx
 
     def fetch(self, url: str) -> FetchOutcome:
-        # Enforce the blocklist BEFORE any network call (Property 3 / R5.6).
+        # Check the user blocklist first so blocked hosts never trigger DNS.
         if is_blocked(url, self._blocked):
             return FetchOutcome(blocked=True, error=f"blocked domain: {url}")
+        unsafe_reason = self._url_validator(url)
+        if unsafe_reason:
+            return FetchOutcome(error=f"unsafe URL: {unsafe_reason}")
         try:
-            resp = self._client.get(url)
+            final_url = url
+            for redirect_count in range(self._max_redirects + 1):
+                resp = self._client.get(final_url)
+                if not resp.is_redirect:
+                    break
+                location = resp.headers.get("Location")
+                if not location:
+                    return FetchOutcome(error=f"redirect without Location for {final_url}")
+                if redirect_count == self._max_redirects:
+                    return FetchOutcome(error=f"too many redirects for {url}")
+                final_url = str(resp.url.join(location))
+                if is_blocked(final_url, self._blocked):
+                    return FetchOutcome(blocked=True, error=f"blocked redirect domain: {final_url}")
+                unsafe_reason = self._url_validator(final_url)
+                if unsafe_reason:
+                    return FetchOutcome(error=f"unsafe redirect URL: {unsafe_reason}")
             if resp.status_code >= 400:
-                return FetchOutcome(error=f"fetch HTTP {resp.status_code} for {url}")
+                return FetchOutcome(error=f"fetch HTTP {resp.status_code} for {final_url}")
             text = self._extractor(resp.text)
             content = truncate_content(text, self._limit)
-            return FetchOutcome(source=Source(url=url, content=content, fetched_at=self._clock()))
+            return FetchOutcome(source=Source(url=final_url, content=content, fetched_at=self._clock()))
         except self._httpx.HTTPError as exc:
             return FetchOutcome(error=f"fetch failed for {url}: {exc}")

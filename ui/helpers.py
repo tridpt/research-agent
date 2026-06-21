@@ -7,8 +7,16 @@ import time
 from pathlib import Path
 from typing import Any
 
+import bleach
+import markdown as markdown_lib
+
 HISTORY_PATH = Path(__file__).resolve().parent.parent / ".research_agent_history.json"
 MAX_HISTORY = 50
+_ALLOWED_HTML_TAGS = {
+    "a", "blockquote", "br", "code", "em", "h1", "h2", "h3", "h4", "hr",
+    "li", "ol", "p", "pre", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul",
+}
+_ALLOWED_HTML_ATTRIBUTES = {"a": ["href", "title"]}
 
 
 def load_history() -> list[dict[str, Any]]:
@@ -62,10 +70,18 @@ def add_history_item(
 def report_to_html(question: str, markdown: str) -> str:
     """Wrap a Markdown report in a self-contained, printable HTML page.
 
-    Uses marked.js from a CDN to render Markdown in the browser, so the file
-    has no server dependency and can be printed to PDF via the browser.
+    Markdown is rendered and sanitized before it reaches the HTML document, so
+    model-generated raw HTML and unsafe URL schemes cannot execute on open.
     """
-    safe_md = json.dumps(markdown)  # safely embed as a JS string literal
+    rendered = markdown_lib.markdown(markdown, extensions=["fenced_code", "tables"])
+    safe_body = bleach.clean(
+        rendered,
+        tags=_ALLOWED_HTML_TAGS,
+        attributes=_ALLOWED_HTML_ATTRIBUTES,
+        protocols={"http", "https"},
+        strip=True,
+        strip_comments=True,
+    )
     safe_title = html.escape(question)
     return f"""<!DOCTYPE html>
 <html lang="vi">
@@ -73,7 +89,6 @@ def report_to_html(question: str, markdown: str) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{safe_title}</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   body {{ max-width: 820px; margin: 40px auto; padding: 0 20px;
          font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
@@ -90,9 +105,6 @@ def report_to_html(question: str, markdown: str) -> str:
 </style>
 </head>
 <body>
-<div id="content"></div>
-<script>
-  document.getElementById("content").innerHTML = marked.parse({safe_md});
-</script>
+<div id="content">{safe_body}</div>
 </body>
 </html>"""

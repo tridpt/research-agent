@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from research_agent.config import ENV_API_KEY, resolve_settings
-from research_agent.models import Settings, Source
+from research_agent.models import SearchResult, Settings, Source
 from research_agent.multi_agent import (
     dedupe_sources,
     make_plan,
@@ -82,8 +82,10 @@ class _MultiLLM:
             if m.content.startswith("Research question: "):
                 q = m.content.split("Research question: ", 1)[1]
         url = self._reads.get(q)
-        # Read once, then finish (the dedupe/diversity logic handles the rest).
+        # Search first, then read one approved result for each sub-question.
         joined = " ".join(m.content for m in messages)
+        if "Search results found so far" not in joined:
+            return {"action": "search", "query": q}
         if url and url not in joined.split("Source URL: ")[-1][:80]:
             # crude: if we haven't shown the source yet, read it
             if "Source URL:" not in joined:
@@ -94,7 +96,7 @@ class _MultiLLM:
         sys = messages[0].content if messages else ""
         if "research planner" in sys:
             return '{"sub_questions": ["sub one", "sub two"]}'
-        return "Final report [https://a.com/x] [https://b.com/y]"
+        return "Final report [1] [2]"
 
 
 def test_run_multi_agent_collects_across_subquestions() -> None:
@@ -102,7 +104,14 @@ def test_run_multi_agent_collects_across_subquestions() -> None:
         question="big question",
         settings=_settings(),
         llm=_MultiLLM(),
-        search=FakeSearch(SearchOutcome(results=())),
+        search=FakeSearch(
+            SearchOutcome(
+                results=(
+                    SearchResult(title="A", url="https://a.com/x", snippet=""),
+                    SearchResult(title="B", url="https://b.com/y", snippet=""),
+                )
+            )
+        ),
         fetch=FakeFetch(),
         synthesize_fn=synthesize,
         clock=lambda: 0.0,

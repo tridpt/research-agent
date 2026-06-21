@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from .fetch_tool import FetchOutcome, FetchTool
@@ -66,13 +67,23 @@ class FetchCache:
 class CachingFetchTool:
     """Wraps a FetchTool, serving cache hits and storing successful fetches."""
 
-    def __init__(self, inner: FetchTool, cache: FetchCache) -> None:
+    def __init__(
+        self,
+        inner: FetchTool,
+        cache: FetchCache,
+        url_validator: Callable[[str], str | None] | None = None,
+    ) -> None:
         self._inner = inner
         self._cache = cache
+        self._url_validator = url_validator
         self.hits = 0
         self.misses = 0
 
     def fetch(self, url: str) -> FetchOutcome:
+        if self._url_validator is not None:
+            unsafe_reason = self._url_validator(url)
+            if unsafe_reason:
+                return FetchOutcome(error=f"unsafe URL: {unsafe_reason}")
         cached = self._cache.get(url)
         if cached is not None:
             self.hits += 1

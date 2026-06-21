@@ -18,7 +18,7 @@ def render_markdown(report: Report) -> str:
     lines.append("")
     if report.sources:
         for i, src in enumerate(report.sources, start=1):
-            lines.append(f"{i}. {src.url}")
+            lines.append(f"{i}. [{src.url}]({src.url})")
     else:
         lines.append("_No sources were collected._")
     lines.append("")

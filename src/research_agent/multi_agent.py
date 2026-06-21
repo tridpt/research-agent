@@ -13,7 +13,7 @@ decompose tasks; each role has a narrow, well-defined responsibility.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from .llm import LLMProvider, Message
@@ -81,7 +81,7 @@ def run_multi_agent(
     llm: LLMProvider,
     search: Any,
     fetch: Any,
-    synthesize_fn: Callable[[str, list[Source], LLMProvider], Report],
+    synthesize_fn: Callable[[str, list[Source], LLMProvider, Sequence[str]], Report],
     clock: Callable[[], float],
     emit: Callable[[TraceEvent], None],
     max_sub_questions: int = 4,
@@ -110,10 +110,16 @@ def run_multi_agent(
     # 2. Researchers (one per sub-question), each reusing the agent loop. We pass
     #    a no-op synthesize so the loop returns without an extra LLM call; we only
     #    want the gathered sources from each researcher's SessionState.
-    def _collect_only(_q: str, srcs: list[Source], _llm: LLMProvider) -> Report:
+    def _collect_only(
+        _q: str,
+        srcs: list[Source],
+        _llm: LLMProvider,
+        _tool_notes: Sequence[str],
+    ) -> Report:
         return Report(question=_q, body_markdown="", sources=tuple(srcs))
 
     groups: list[list[Source]] = []
+    tool_notes: list[str] = []
     for sub in sub_questions:
         state = SessionState(question=sub, started_at=clock())
         run_session(
@@ -128,7 +134,8 @@ def run_multi_agent(
             initial_state=state,
         )
         groups.append(state.sources)
+        tool_notes.extend(state.tool_notes)
 
     # 3. Writer: synthesize one report from all gathered sources.
     merged = dedupe_sources(groups)
-    return synthesize_fn(question, merged, llm)
+    return synthesize_fn(question, merged, llm, tool_notes)

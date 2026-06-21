@@ -101,6 +101,16 @@ def _parse_blocked(value: object) -> frozenset[str]:
     return frozenset(str(d).strip().lower() for d in items if str(d).strip())
 
 
+def _parse_paths(value: object) -> tuple[Path, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items = value
+    else:
+        items = (value,)
+    return tuple(Path(str(path)) for path in items if str(path).strip())
+
+
 def resolve_settings(
     env: Mapping[str, str],
     cli_overrides: Mapping[str, object],
@@ -144,6 +154,7 @@ def resolve_settings(
     round_delay = _as_float(_resolve("round_delay_seconds", cli_overrides, env), defaults.round_delay_seconds)
     cache_raw = _resolve("cache_dir", cli_overrides, env)
     cache_dir = Path(str(cache_raw)) if cache_raw else None
+    allowed_pdf_paths = _parse_paths(cli_overrides.get("pdf_paths"))
 
     return Settings(
         api_key=str(api_key),
@@ -162,4 +173,5 @@ def resolve_settings(
         cache_dir=cache_dir,
         cache_ttl=cache_ttl,
         round_delay_seconds=round_delay,
+        allowed_pdf_paths=allowed_pdf_paths,
     )

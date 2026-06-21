@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 from pypdf import PdfReader
@@ -18,6 +20,7 @@ from .content import host_of, wrap_untrusted
 from .decision import parse_decision
 from .fetch_tool import FetchTool
 from .llm import LLMProvider, Message
+from .local_documents import approved_pdf_path
 from .models import (
     ActionType,
     AgentDecision,
@@ -37,12 +40,18 @@ from .tools import TOOL_SCHEMAS
 SYSTEM_PROMPT = (
     "You are an autonomous research agent. Your goal is to answer the user's "
     "research question by deciding, step by step, whether to SEARCH the web, "
-    "READ a source, or FINISH and synthesize. Respond ONLY with a JSON object "
+    "READ a source, or FINISH and synthesize. You can also use GET_WEATHER "
+    "to get real-time weather. READ_PDF is available only for a PDF the user "
+    "explicitly selected. "
+    "Respond ONLY with a JSON object "
     'like {"action": "search", "query": "..."} or {"action": "read", "url": '
     '"..."} or {"action": "finish"}, optionally with a "reasoning" field. '
     "Prefer to READ at least two or three DIFFERENT sources (distinct domains) "
     "before you FINISH, so the answer is well-grounded; do not re-read a URL "
     "already marked [ALREADY READ]. "
+    "For a narrow real-time question that GET_WEATHER answers directly, treat "
+    "the returned weather source as sufficient evidence and FINISH rather than "
+    "searching merely to meet the source-diversity preference. "
     "IMPORTANT: once search results are available, prefer the READ action on a "
     "promising result URL rather than running yet another search. Only search "
     "again if the current results are clearly irrelevant; never repeat a query "
@@ -75,6 +84,8 @@ def should_allow_finish(
     improve diversity (so the agent never spins uselessly). This never blocks
     termination: the hard budget limits in ``decide_transition`` always apply.
     """
+    if any(source.url.startswith("https://wttr.in/") for source in sources):
+        return True
     have = {host_of(s.url) for s in sources}
     if len(have) >= min_domains:
         return True
@@ -111,6 +122,7 @@ def build_messages(
     search_history: Sequence[str] = (),
     directive: str | None = None,
     tool_notes: Sequence[str] = (),
+    allowed_pdf_paths: Sequence[Path] = (),
 ) -> list[Message]:
     """Pure: assemble the message list for the next decision.
 
@@ -130,6 +142,18 @@ def build_messages(
     if tool_notes:
         messages.append(
             Message(role="user", content="Tool results so far:\n" + "\n".join(tool_notes))
+        )
+    if allowed_pdf_paths:
+        approved_paths = "\n".join(f"- {path}" for path in allowed_pdf_paths)
+        messages.append(
+            Message(
+                role="user",
+                content=(
+                    "The user explicitly approved only these local PDFs for this run. "
+                    "READ_PDF may use an exact path from this list and no other path:\n"
+                    + approved_paths
+                ),
+            )
         )
     if search_history:
         messages.append(
@@ -170,7 +194,7 @@ def run_session(
     llm: LLMProvider,
     search: SearchTool,
     fetch: FetchTool,
-    synthesize_fn: Callable[[str, list[Source], LLMProvider], Report],
+    synthesize_fn: Callable[[str, list[Source], LLMProvider, Sequence[str]], Report],
     clock: Callable[[], float],
     emit: Callable[[TraceEvent], None],
     initial_state: SessionState | None = None,
@@ -187,6 +211,8 @@ def run_session(
     state = initial_state or SessionState(question=question, started_at=clock())
     budget = settings.budget
     delay = getattr(settings, "round_delay_seconds", 0.0) or 0.0
+    allowed_pdf_paths = tuple(getattr(settings, "allowed_pdf_paths", ()))
+    tool_schemas = _tool_schemas_for_session(allowed_pdf_paths)
 
     while True:
         transition = decide_transition(state, budget, clock())
@@ -197,7 +223,15 @@ def run_session(
         if delay > 0 and state.rounds_used > 0:
             sleep(delay)
 
-        decision = _next_valid_decision(llm, state, settings.max_llm_attempts, emit, directive)
+        decision = _next_valid_decision(
+            llm,
+            state,
+            settings.max_llm_attempts,
+            emit,
+            directive,
+            tool_schemas,
+            allowed_pdf_paths,
+        )
 
         state.last_decision = decision
         if decision.action is ActionType.FINISH:
@@ -249,6 +283,12 @@ def run_session(
         elif decision.action is ActionType.READ:
             emit(_action_event(state, decision))
             target = decision.url or ""
+            approved_urls = {result.url for result in state.search_results}
+            if target not in approved_urls:
+                emit(_error_event(state, "read URL was not returned by the search tool"))
+                state.rounds_used += 1
+                emit(_round_event(state))
+                continue
             already_read = any(s.url == target for s in state.sources)
             capped = _domain_count(state.sources, target) >= settings.max_per_domain
             if already_read or capped or target in state.failed_urls:
@@ -294,7 +334,12 @@ def run_session(
         elif decision.action is ActionType.READ_PDF:
             emit(_action_event(state, decision))
             try:
-                path = decision.path or ""
+                path, rejection = approved_pdf_path(decision.path or "", allowed_pdf_paths)
+                if path is None:
+                    emit(_error_event(state, f"read_pdf blocked: {rejection}"))
+                    state.rounds_used += 1
+                    emit(_round_event(state))
+                    continue
                 reader = PdfReader(path)
                 text = "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
                 from .content import truncate_content
@@ -306,26 +351,30 @@ def run_session(
         elif decision.action is ActionType.GET_WEATHER:
             emit(_action_event(state, decision))
             try:
-                location = decision.location or ""
-                resp = httpx.get(f"https://wttr.in/{location}?format=3", timeout=10.0)
+                location = (decision.location or "").strip()
+                # Keep the result as a real source, not only a tool note.  The
+                # synthesizer intentionally refuses to write a report without
+                # sources, and the Streamlit normal-mode path only carries
+                # sources forward to its streaming synthesis step.
+                weather_url = f"https://wttr.in/{quote(location, safe='')}?format=3"
+                resp = httpx.get(
+                    weather_url,
+                    timeout=10.0,
+                    headers={"User-Agent": "research-agent/0.1"},
+                )
                 resp.raise_for_status()
                 note = f"Weather for '{location}': {resp.text.strip()}"
                 state.tool_notes.append(note)
+                state.sources.append(
+                    Source(url=weather_url, content=note, fetched_at=clock())
+                )
             except Exception as exc:
                 emit(_error_event(state, f"get_weather error: {exc}"))
 
         state.rounds_used += 1
         emit(_round_event(state))
 
-    synth_question = question
-    if state.tool_notes:
-        synth_question = (
-            question
-            + "\n\n[Tool results to incorporate where relevant: "
-            + "; ".join(state.tool_notes)
-            + "]"
-        )
-    return synthesize_fn(synth_question, state.sources, llm)
+    return synthesize_fn(question, state.sources, llm, tuple(state.tool_notes))
 
 
 def _next_valid_decision(
@@ -334,6 +383,8 @@ def _next_valid_decision(
     max_attempts: int,
     emit: Callable[[TraceEvent], None],
     directive: str | None = None,
+    tool_schemas: Sequence[dict] = TOOLS,
+    allowed_pdf_paths: Sequence[Path] = (),
 ) -> AgentDecision:
     """Ask the LLM for a decision, retrying invalid responses up to max_attempts."""
     attempts = max(1, max_attempts)
@@ -347,8 +398,9 @@ def _next_valid_decision(
                 state.search_history,
                 directive,
                 state.tool_notes,
+                allowed_pdf_paths,
             ),
-            TOOLS,
+            tool_schemas,
         )
         parsed = parse_decision(raw)
         if isinstance(parsed, AgentDecision):
@@ -359,6 +411,13 @@ def _next_valid_decision(
         emit(_error_event(state, f"invalid decision: {parsed.reason}"))
     # Could not get a valid decision; finish gracefully with what we have.
     return AgentDecision(action=ActionType.FINISH, reasoning=f"giving up: {last_reason}")
+
+
+def _tool_schemas_for_session(allowed_pdf_paths: Sequence[Path]) -> list[dict]:
+    """Expose READ_PDF only after a user has explicitly approved a file."""
+    if allowed_pdf_paths:
+        return TOOLS
+    return [tool for tool in TOOLS if tool["function"]["name"] != "read_pdf"]
 
 
 def _domain_count(sources: Sequence[Source], url: str) -> int:

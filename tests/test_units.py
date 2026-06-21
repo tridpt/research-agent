@@ -16,6 +16,7 @@ from research_agent.models import (
     ActionType,
     AgentDecision,
     InvalidDecision,
+    SearchResult,
     Settings,
     Source,
     TraceEvent,
@@ -256,7 +257,9 @@ def test_run_session_collects_sources_and_synthesizes() -> None:
             {"action": "finish"},
         ]
     )
-    search = FakeSearch(SearchOutcome(results=()))
+    search = FakeSearch(
+        SearchOutcome(results=(SearchResult(title="A", url="https://a.com/x", snippet=""),))
+    )
     fetch = FakeFetch()
     report = run_session(
         question="q",
@@ -307,7 +310,9 @@ def test_run_session_paces_with_delay() -> None:
         question="q",
         settings=settings,
         llm=llm,
-        search=FakeSearch(SearchOutcome(results=())),
+        search=FakeSearch(
+            SearchOutcome(results=(SearchResult(title="A", url="https://a.com/1", snippet=""),))
+        ),
         fetch=FakeFetch(),
         synthesize_fn=synthesize,
         clock=lambda: 0.0,
@@ -322,9 +327,10 @@ def test_run_session_uses_calculate_tool() -> None:
     # The agent calls calculate, then finishes; the tool note is passed to synth.
     captured = {}
 
-    def capturing_synth(q, srcs, llm):
+    def capturing_synth(q, srcs, llm, tool_notes):
         captured["question"] = q
-        return synthesize(q, srcs, llm)
+        captured["tool_notes"] = tool_notes
+        return synthesize(q, srcs, llm, tool_notes)
 
     llm = ScriptedLLM(
         decisions=[
@@ -332,7 +338,7 @@ def test_run_session_uses_calculate_tool() -> None:
             {"action": "finish"},
         ]
     )
-    run_session(
+    report = run_session(
         question="growth rate?",
         settings=_settings(),
         llm=llm,
@@ -342,9 +348,84 @@ def test_run_session_uses_calculate_tool() -> None:
         clock=lambda: 0.0,
         emit=lambda e: None,
     )
-    # The calculated result is included in the question handed to synthesis.
-    assert "calculate((120-90)/90*100)" in captured["question"]
-    assert "33.3" in captured["question"]
+    assert captured["question"] == "growth rate?"
+    assert "calculate((120-90)/90*100)" in captured["tool_notes"][0]
+    assert "33.3" in captured["tool_notes"][0]
+    assert report.no_information is False
+
+
+def test_run_session_rejects_unapproved_read_and_pdf_actions() -> None:
+    events = []
+    llm = ScriptedLLM(
+        decisions=[
+            {"action": "read", "url": "http://127.0.0.1:8501/admin"},
+            {"action": "read_pdf", "path": "C:/private/secret.pdf"},
+            {"action": "finish"},
+        ]
+    )
+    fetch = FakeFetch()
+    run_session(
+        question="q",
+        settings=_settings(),
+        llm=llm,
+        search=FakeSearch(),
+        fetch=fetch,
+        synthesize_fn=synthesize,
+        clock=lambda: 0.0,
+        emit=events.append,
+    )
+
+    assert fetch.urls == []
+    errors = [event.detail.get("error", "") for event in events]
+    assert any("not returned by the search tool" in error for error in errors)
+    assert any("read_pdf blocked" in error for error in errors)
+
+
+def test_run_session_uses_weather_tool_as_a_source(monkeypatch) -> None:
+    """Weather data must reach synthesis, including locations with accents."""
+    captured = {}
+
+    class WeatherResponse:
+        text = "Hà Nội: ☀️  +33°C"
+
+        def raise_for_status(self) -> None:
+            pass
+
+    def fake_get(url, **kwargs):
+        captured["url"] = url
+        captured["headers"] = kwargs.get("headers")
+        return WeatherResponse()
+
+    monkeypatch.setattr("research_agent.agent.httpx.get", fake_get)
+
+    def capturing_synth(_question, sources, _llm, _tool_notes):
+        captured["sources"] = list(sources)
+        return synthesize(_question, sources, _llm, _tool_notes)
+
+    llm = ScriptedLLM(
+        decisions=[
+            {"action": "get_weather", "location": "Hà Nội"},
+            {"action": "finish"},
+        ],
+        text="Trời nắng [https://wttr.in/H%C3%A0%20N%E1%BB%99i?format=3]",
+    )
+    report = run_session(
+        question="Thời tiết ở Hà Nội hôm nay thế nào?",
+        settings=_settings(),
+        llm=llm,
+        search=FakeSearch(),
+        fetch=FakeFetch(),
+        synthesize_fn=capturing_synth,
+        clock=lambda: 0.0,
+        emit=lambda e: None,
+    )
+
+    assert captured["url"] == "https://wttr.in/H%C3%A0%20N%E1%BB%99i?format=3"
+    assert captured["headers"] == {"User-Agent": "research-agent/0.1"}
+    assert len(captured["sources"]) == 1
+    assert captured["sources"][0].content == "Weather for 'Hà Nội': Hà Nội: ☀️  +33°C"
+    assert report.no_information is False
+    assert len(report.sources) == 1
 
 
 # ---- Synthesizer (R6.1, R6.5) ----
@@ -374,6 +455,15 @@ def test_synthesize_language_adds_instruction() -> None:
     srcs = [Source(url="https://a.com/x", content="c", fetched_at=0.0)]
     synthesize("q", srcs, CapturingLLM(), language="vi")
     assert "Vietnamese" in captured["system"]
+
+
+def test_synthesize_normalizes_nested_url_citations() -> None:
+    url = "https://a.com/x"
+    source = Source(url=url, content="c", fetched_at=0.0)
+    report = synthesize("q", [source], ScriptedLLM(decisions=[], text=f"Fact [[{url}]({url})]"))
+
+    assert report.body_markdown == "Fact [1]"
+    assert report.citations and report.citations[0].url == url
 
 
 def test_synthesize_stream_yields_and_returns_report() -> None:
@@ -412,7 +502,7 @@ def test_synthesize_stream_return_value() -> None:
             next(gen)
     except StopIteration as stop:
         report = stop.value
-    assert report.body_markdown == "Body [https://a.com/x]"
+    assert report.body_markdown == "Body [1]"
     assert len(report.citations) == 1
 
 

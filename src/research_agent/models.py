@@ -70,6 +70,8 @@ class Settings:
     # Fetch cache.
     cache_dir: Path | None = None
     cache_ttl: float = 0.0        # seconds; <=0 means entries never expire
+    # Local PDFs are opt-in and must be selected by the user for this session.
+    allowed_pdf_paths: tuple[Path, ...] = ()
 
 
 # --------------------------------------------------------------------------

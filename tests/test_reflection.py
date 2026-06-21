@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from research_agent.config import ENV_API_KEY, resolve_settings
-from research_agent.models import Settings
+from research_agent.models import SearchResult, Settings
 from research_agent.reflection import (
     Critique,
     ReflectionVerdict,
@@ -95,14 +95,20 @@ class _CritiqueLLM:
 
 def test_run_with_reflection_accepts_when_satisfied() -> None:
     llm = _CritiqueLLM(
-        decisions=[{"action": "read", "url": "https://a.com/x"}, {"action": "finish"}],
+        decisions=[
+            {"action": "search", "query": "topic"},
+            {"action": "read", "url": "https://a.com/x"},
+            {"action": "finish"},
+        ],
         critiques=['{"score": 9, "gaps": [], "follow_up_queries": []}'],
     )
     report = run_with_reflection(
         question="q",
         settings=_settings(),
         llm=llm,
-        search=FakeSearch(SearchOutcome(results=())),
+        search=FakeSearch(
+            SearchOutcome(results=(SearchResult(title="A", url="https://a.com/x", snippet=""),))
+        ),
         fetch=FakeFetch(),
         synthesize_fn=synthesize,
         clock=lambda: 0.0,
@@ -116,6 +122,7 @@ def test_run_with_reflection_revises_then_accepts() -> None:
     # First critique is low (forces a revise), second is high (accept).
     llm = _CritiqueLLM(
         decisions=[
+            {"action": "search", "query": "topic"},
             {"action": "read", "url": "https://a.com/x"},
             {"action": "finish"},
             {"action": "read", "url": "https://b.com/y"},
@@ -130,7 +137,14 @@ def test_run_with_reflection_revises_then_accepts() -> None:
         question="q",
         settings=_settings(),
         llm=llm,
-        search=FakeSearch(SearchOutcome(results=())),
+        search=FakeSearch(
+            SearchOutcome(
+                results=(
+                    SearchResult(title="A", url="https://a.com/x", snippet=""),
+                    SearchResult(title="B", url="https://b.com/y", snippet=""),
+                )
+            )
+        ),
         fetch=FakeFetch(),
         synthesize_fn=synthesize,
         clock=lambda: 0.0,

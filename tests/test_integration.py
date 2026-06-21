@@ -7,7 +7,7 @@ from research_agent.agent import build_messages, run_session
 from research_agent.config import ENV_API_KEY, resolve_settings
 from research_agent.content import UNTRUSTED_CLOSE, UNTRUSTED_OPEN
 from research_agent.fetch_tool import FetchOutcome, default_extractor
-from research_agent.models import Settings, Source
+from research_agent.models import SearchResult, Settings, Source
 from research_agent.render import render_markdown
 from research_agent.report_writer import write_report
 from research_agent.search_tool import SearchOutcome
@@ -38,13 +38,20 @@ def test_end_to_end_smoke(tmp_path: Path) -> None:
             {"action": "read", "url": "https://b.com/y"},
             {"action": "finish"},
         ],
-        text="Findings about the topic [https://a.com/x] and more [https://b.com/y].",
+        text="Findings about the topic [1] and more [2].",
     )
     report = run_session(
         question="what is the topic",
         settings=_settings(),
         llm=llm,
-        search=FakeSearch(SearchOutcome(results=())),
+        search=FakeSearch(
+            SearchOutcome(
+                results=(
+                    SearchResult(title="A", url="https://a.com/x", snippet=""),
+                    SearchResult(title="B", url="https://b.com/y", snippet=""),
+                )
+            )
+        ),
         fetch=FakeFetch(),
         synthesize_fn=synthesize,
         clock=lambda: 0.0,

@@ -3,7 +3,7 @@
 ![CI](https://github.com/tridpt/research-agent/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 
 **What is it?** An autonomous AI research agent. You ask a question; it searches
 the web over multiple rounds, reads sources, decides on its own when it has
@@ -65,6 +65,10 @@ reason about.
 - The agent **always terminates** thanks to a finite research budget
   (max rounds / sources / seconds).
 - Citations can only point to sources that were actually fetched.
+- Web reads are restricted to search results and public HTTP(S) destinations;
+  private, loopback, and link-local networks are blocked, including redirects.
+- Local PDFs are opt-in: the agent can only read a file explicitly selected for
+  the current run with `--pdf` (or the UI file picker).
 
 ### Efficiency & quality
 - **Persistent fetch cache**: a URL read once is reused from disk across
@@ -82,6 +86,8 @@ The agent chooses among these tools on each step via native function-calling:
 - **calculate** — evaluate a safe arithmetic expression (no `eval`; AST-based,
   allow-listed operators) for precise numbers in the report.
 - **now** — get the current date/time (for "latest"/"today"/recency questions).
+- **get_weather** — retrieve current weather from wttr.in.
+- **read_pdf** — read a PDF explicitly selected by the user for the current run.
 - **finish** — stop and synthesize the cited report.
 
 ### Agent modes
@@ -104,6 +110,12 @@ The agent chooses among these tools on each step via native function-calling:
 
 ```powershell
 python -m pip install -e ".[dev]"
+```
+
+To permit one local PDF in a CLI run, opt in explicitly:
+
+```powershell
+research-agent "Summarize this document" --pdf C:\Documents\report.pdf
 ```
 
 ## Configure
@@ -243,7 +255,7 @@ src/research_agent/
 
 Ideas for future versions (contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)):
 
-- [ ] More agent tools (read local PDFs, fetch current weather/stock data)
+- [ ] More agent tools (e.g. stock data)
 - [ ] Source-credibility ranking (prefer gov/edu/established domains)
 - [ ] Long-term memory across sessions (reference past research)
 - [ ] Direct PDF export (currently via HTML → print)

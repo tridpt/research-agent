@@ -185,9 +185,17 @@ def test_should_allow_finish() -> None:
     assert should_allow_finish([a], [], min_domains=2) is True
 
 
+def test_should_allow_finish_after_direct_weather_result() -> None:
+    weather = Source(url="https://wttr.in/Hanoi?format=3", content="Hanoi: +33°C", fetched_at=0.0)
+    extra = [SearchResult(title="Other", url="https://example.com/weather", snippet="")]
+
+    assert should_allow_finish([weather], extra, min_domains=2) is True
+
+
 def test_run_session_caps_per_domain() -> None:
     llm = ScriptedLLM(
         decisions=[
+            {"action": "search", "query": "topic"},
             {"action": "read", "url": "https://a.com/1"},
             {"action": "read", "url": "https://a.com/2"},  # same domain -> capped
             {"action": "read", "url": "https://b.com/1"},
@@ -198,7 +206,15 @@ def test_run_session_caps_per_domain() -> None:
         question="q",
         settings=_settings(max_per_domain=1, min_domains=1),
         llm=llm,
-        search=FakeSearch(SearchOutcome(results=())),
+        search=FakeSearch(
+            SearchOutcome(
+                results=(
+                    SearchResult(title="A", url="https://a.com/1", snippet=""),
+                    SearchResult(title="B", url="https://a.com/2", snippet=""),
+                    SearchResult(title="C", url="https://b.com/1", snippet=""),
+                )
+            )
+        ),
         fetch=FakeFetch(),
         synthesize_fn=synthesize,
         clock=lambda: 0.0,

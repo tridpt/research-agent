@@ -29,6 +29,7 @@ from .search_tool import (
     TavilySearchTool,
 )
 from .synthesizer import synthesize
+from .url_safety import public_http_url_error
 
 
 def is_valid_question(raw: str) -> bool:
@@ -62,6 +63,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-per-domain", type=int, dest="max_per_domain", help="Never collect more than N sources per domain.")
     p.add_argument("--cache-dir", dest="cache_dir", help="Directory for the persistent fetch cache.")
     p.add_argument("--no-cache", action="store_true", help="Disable the persistent fetch cache.")
+    p.add_argument(
+        "--pdf",
+        action="append",
+        dest="pdf_paths",
+        help="Explicitly approve one local PDF for this run (may be repeated).",
+    )
     p.add_argument("--reflect", action="store_true", help="Enable self-critique: review the draft and research gaps.")
     p.add_argument("--reflect-iterations", type=int, dest="reflect_iterations", default=2, help="Max reflection revision rounds.")
     p.add_argument("--multi-agent", action="store_true", dest="multi_agent", help="Use a planner/researcher/writer agent team.")
@@ -74,6 +81,7 @@ def _cli_overrides(args: argparse.Namespace) -> Mapping[str, object]:
     keys = [
         "output_path", "verbose", "max_rounds", "max_sources", "max_seconds",
         "model", "provider", "min_domains", "max_per_domain", "cache_dir",
+        "pdf_paths",
     ]
     return {k: getattr(args, k) for k in keys if getattr(args, k) is not None}
 
@@ -134,7 +142,11 @@ def main(argv: Sequence[str]) -> int:
     # repeated reads of the same page across sessions are served from disk.
     if not getattr(args, "no_cache", False):
         cache_dir = settings.cache_dir or Path(".research_agent_cache")
-        fetch = CachingFetchTool(fetch, FetchCache(cache_dir, ttl_seconds=settings.cache_ttl))
+        fetch = CachingFetchTool(
+            fetch,
+            FetchCache(cache_dir, ttl_seconds=settings.cache_ttl),
+            url_validator=public_http_url_error,
+        )
     emit = make_emitter(settings.verbose)
 
     try:

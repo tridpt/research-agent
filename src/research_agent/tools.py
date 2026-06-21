@@ -115,7 +115,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_pdf",
-            "description": "Read the text content of a local PDF file.",
+            "description": (
+                "Read one local PDF explicitly selected by the user. Only use an "
+                "exact path listed in the approved-PDF instruction."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
