@@ -64,6 +64,6 @@ def test_report_renders_pdf_name_without_local_path() -> None:
     report = Report(question="q", body_markdown="Answer [1]", sources=(source,))
     markdown = render_markdown(report)
 
-    assert "User-provided PDF: project brief.pdf" in markdown
-    assert "local-pdf://project%20brief.pdf" in markdown
+    assert "User-provided PDF: project brief.pdf (2 pages)" in markdown
+    assert "local-pdf://" not in markdown
     assert "C:\\Users" not in markdown
