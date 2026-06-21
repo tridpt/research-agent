@@ -43,9 +43,8 @@ SYSTEM_PROMPT = (
     "READ a source, or FINISH and synthesize. You can also use GET_WEATHER "
     "to get real-time weather. READ_PDF is available only for a PDF the user "
     "explicitly selected. "
-    "Respond ONLY with a JSON object "
-    'like {"action": "search", "query": "..."} or {"action": "read", "url": '
-    '"..."} or {"action": "finish"}, optionally with a "reasoning" field. '
+    "Use exactly one of the provided function tools for each decision. Do not "
+    "reply with JSON text and never call a tool named JSON. "
     "Prefer to READ at least two or three DIFFERENT sources (distinct domains) "
     "before you FINISH, so the answer is well-grounded; do not re-read a URL "
     "already marked [ALREADY READ]. "
@@ -182,9 +181,7 @@ def build_messages(
                 content=f"Source URL: {src.url}\n{wrap_untrusted(src.content)}",
             )
         )
-    messages.append(
-        Message(role="user", content="Decide the next action as a JSON object.")
-    )
+    messages.append(Message(role="user", content="Choose the next action using a provided tool."))
     return messages
 
 

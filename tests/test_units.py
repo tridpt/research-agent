@@ -129,6 +129,19 @@ def test_recover_from_error_body_with_wrapper() -> None:
     assert rec == {"action": "read", "url": "https://en.wikipedia.org/wiki/CAP_theorem"}
 
 
+def test_recover_from_prefixed_error_body_with_pdf_wrapper() -> None:
+    from research_agent.llm import _recover_from_failed_generation
+
+    body = (
+        'LLM HTTP 400: {"error":{"message":"Tool call validation failed",'
+        '"code":"tool_use_failed",'
+        '"failed_generation":"{\\"name\\": \\"JSON\\", \\"arguments\\": '
+        '{\\"action\\":\\"read_pdf\\",\\"path\\":\\"C:/selected.pdf\\"}}"}}'
+    )
+    rec = _recover_from_failed_generation(body)
+    assert rec == {"action": "read_pdf", "path": "C:/selected.pdf"}
+
+
 def test_recover_from_named_tool_arguments() -> None:
     from research_agent.llm import _recover_from_failed_generation
 

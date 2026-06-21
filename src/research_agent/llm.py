@@ -134,6 +134,20 @@ def _decision_from_obj(obj: Any) -> dict[str, Any] | None:
     return None
 
 
+def _recover_from_obj(obj: Any) -> dict[str, Any] | None:
+    """Recover a decision from one decoded object, including error wrappers."""
+    decision = _decision_from_obj(obj)
+    if decision is not None:
+        return decision
+    if not isinstance(obj, dict):
+        return None
+    error = obj.get("error")
+    failed_generation = error.get("failed_generation") if isinstance(error, dict) else None
+    if isinstance(failed_generation, str) and failed_generation:
+        return _recover_from_failed_generation(failed_generation)
+    return None
+
+
 def _recover_from_failed_generation(text: str) -> dict[str, Any] | None:
     """Pure: recover an intended action from malformed/plain-text tool output.
 
@@ -151,11 +165,9 @@ def _recover_from_failed_generation(text: str) -> dict[str, Any] | None:
     # (json.loads handles the escaping for us).
     try:
         body = json.loads(text)
-        fg = body.get("error", {}).get("failed_generation") if isinstance(body, dict) else None
-        if isinstance(fg, str) and fg:
-            recovered = _recover_from_failed_generation(fg)
-            if recovered is not None:
-                return recovered
+        recovered = _recover_from_obj(body)
+        if recovered is not None:
+            return recovered
     except (json.JSONDecodeError, TypeError, AttributeError):
         pass
 
@@ -171,13 +183,18 @@ def _recover_from_failed_generation(text: str) -> dict[str, Any] | None:
             return {"action": name, **args}
         return {"action": name}
 
-    # Shapes 2/3: any JSON object in the text that yields a decision.
-    for match in re.finditer(r"\{(?:[^{}]|\{[^{}]*\})*\}", text, re.DOTALL):
-        try:
-            parsed = json.loads(match.group(0))
-        except (json.JSONDecodeError, TypeError):
+    # Shapes 2/3: decode every JSON object embedded in the text. ``raw_decode``
+    # handles an API-error prefix such as "LLM HTTP 400: " while a regex cannot
+    # reliably distinguish braces inside an escaped ``failed_generation`` value.
+    decoder = json.JSONDecoder()
+    for offset, char in enumerate(text):
+        if char != "{":
             continue
-        decision = _decision_from_obj(parsed)
+        try:
+            parsed, _ = decoder.raw_decode(text[offset:])
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+        decision = _recover_from_obj(parsed)
         if decision is not None:
             return decision
     return None
