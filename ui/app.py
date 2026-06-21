@@ -37,6 +37,7 @@ from helpers import (  # noqa: E402
 from research_agent.agent import run_session  # noqa: E402
 from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
 from research_agent.config import resolve_settings  # noqa: E402
+from research_agent.error_diagnostics import diagnose_llm_error  # noqa: E402
 from research_agent.errors import ConfigError, LLMError  # noqa: E402
 from research_agent.fetch_tool import HttpFetchTool  # noqa: E402
 from research_agent.llm import Message, OpenAICompatibleProvider  # noqa: E402
@@ -278,11 +279,33 @@ def _prepare_selected_pdf(uploaded_file):
     return temporary_dir, path
 
 
+def _request_research_retry() -> None:
+    """Queue one user-initiated retry for the next Streamlit rerun."""
+    st.session_state["_retry_research"] = True
+
+
+def _show_llm_error(exc: LLMError, retry_key: str | None = None) -> None:
+    """Render a safe diagnosis rather than the provider's raw response body."""
+    diagnosis = diagnose_llm_error(exc)
+    st.error(f"**{diagnosis.title_vi}**\n\n{diagnosis.detail_vi}")
+    st.caption("Gợi ý: " + " • ".join(diagnosis.suggestions_vi))
+    if diagnosis.retryable and retry_key is not None:
+        st.caption("Bạn có thể thử lại thủ công; agent sẽ chạy một phiên mới.")
+        st.button(
+            "🔁 Thử lại",
+            key=retry_key,
+            type="primary",
+            use_container_width=True,
+            on_click=_request_research_retry,
+        )
+
+
 # --------------------------------------------------------------------------
 # Main: question + run
 # --------------------------------------------------------------------------
+auto_retry_research = bool(st.session_state.pop("_retry_research", False))
 question = st.text_input("Câu hỏi nghiên cứu của bạn", placeholder="Ví dụ: Sự khác nhau giữa SQL và NoSQL là gì?")
-run_clicked = st.button("🚀 Bắt đầu nghiên cứu", type="primary", use_container_width=True)
+run_clicked = st.button("🚀 Bắt đầu nghiên cứu", type="primary", use_container_width=True) or auto_retry_research
 
 if run_clicked:
     if not question.strip():
@@ -362,7 +385,7 @@ if run_clicked:
                 status.update(label="Hoàn tất!", state="complete")
             except LLMError as exc:
                 status.update(label="Lỗi", state="error")
-                st.error(f"Lỗi gọi mô hình: {exc}")
+                _show_llm_error(exc, retry_key="retry_research")
                 st.stop()
 
         # Stream the report body live for normal mode (into a temporary area
@@ -391,7 +414,7 @@ if run_clicked:
                 with stream_area.container():
                     st.write_stream(_text_stream())
             except LLMError as exc:
-                st.error(f"Lỗi gọi mô hình: {exc}")
+                _show_llm_error(exc, retry_key="retry_research")
                 st.stop()
             report = _result.get("report") or synthesize(
                 question,
@@ -549,7 +572,11 @@ if history:
                     try:
                         answer = chat_llm.generate(messages)
                     except LLMError as exc:
-                        answer = f"Lỗi gọi mô hình: {exc}"
+                        diagnosis = diagnose_llm_error(exc)
+                        answer = (
+                            f"**{diagnosis.title_vi}**\n\n{diagnosis.detail_vi}\n\n"
+                            f"_Gợi ý: {' • '.join(diagnosis.suggestions_vi)}_"
+                        )
                 st.markdown(answer)
             st.session_state["chat"].append({"role": "assistant", "content": answer})
 
