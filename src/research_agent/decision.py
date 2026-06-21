@@ -52,5 +52,17 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
     if action is ActionType.NOW:
         return AgentDecision(action=ActionType.NOW, reasoning=reasoning)
 
+    if action is ActionType.READ_PDF:
+        path = raw.get("path")
+        if not isinstance(path, str) or not path.strip():
+            return InvalidDecision(reason="READ_PDF requires a non-empty 'path'")
+        return AgentDecision(action=action, path=path.strip(), reasoning=reasoning)
+
+    if action is ActionType.GET_WEATHER:
+        location = raw.get("location")
+        if not isinstance(location, str) or not location.strip():
+            return InvalidDecision(reason="GET_WEATHER requires a non-empty 'location'")
+        return AgentDecision(action=action, location=location.strip(), reasoning=reasoning)
+
     # FINISH needs no extra parameters.
     return AgentDecision(action=ActionType.FINISH, reasoning=reasoning)

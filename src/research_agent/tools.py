@@ -111,4 +111,46 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_pdf",
+            "description": "Read the text content of a local PDF file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute path to the local PDF file.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this PDF file is needed.",
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get the current weather for a specific location.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city or location name to get weather for.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why the weather data is needed.",
+                    },
+                },
+                "required": ["location"],
+            },
+        },
+    },
 ]

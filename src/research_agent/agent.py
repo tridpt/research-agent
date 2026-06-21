@@ -10,6 +10,9 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 
+import httpx
+from pypdf import PdfReader
+
 from .calculator import CalculatorError, calculate_str, now_str
 from .content import host_of, wrap_untrusted
 from .decision import parse_decision
@@ -288,6 +291,28 @@ def run_session(
         elif decision.action is ActionType.NOW:
             emit(_action_event(state, decision))
             state.tool_notes.append(f"current datetime = {now_str(clock)}")
+        elif decision.action is ActionType.READ_PDF:
+            emit(_action_event(state, decision))
+            try:
+                path = decision.path or ""
+                reader = PdfReader(path)
+                text = "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
+                from .content import truncate_content
+                truncated = truncate_content(text, settings.per_source_char_limit)
+                note = f"Content of PDF '{path}':\n{truncated}"
+                state.tool_notes.append(note)
+            except Exception as exc:
+                emit(_error_event(state, f"read_pdf error: {exc}"))
+        elif decision.action is ActionType.GET_WEATHER:
+            emit(_action_event(state, decision))
+            try:
+                location = decision.location or ""
+                resp = httpx.get(f"https://wttr.in/{location}?format=3", timeout=10.0)
+                resp.raise_for_status()
+                note = f"Weather for '{location}': {resp.text.strip()}"
+                state.tool_notes.append(note)
+            except Exception as exc:
+                emit(_error_event(state, f"get_weather error: {exc}"))
 
         state.rounds_used += 1
         emit(_round_event(state))
@@ -382,6 +407,10 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["url"] = decision.url
     if decision.expression:
         detail["expression"] = decision.expression
+    if decision.path:
+        detail["path"] = decision.path
+    if decision.location:
+        detail["location"] = decision.location
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,

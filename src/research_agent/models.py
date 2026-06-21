@@ -21,6 +21,8 @@ class ActionType(Enum):
     FINISH = "finish"
     CALCULATE = "calculate"
     NOW = "now"
+    READ_PDF = "read_pdf"
+    GET_WEATHER = "get_weather"
 
 
 class TransitionKind(Enum):
@@ -97,6 +99,8 @@ class AgentDecision:
     query: str | None = None
     url: str | None = None
     expression: str | None = None
+    path: str | None = None
+    location: str | None = None
 
 
 @dataclass(frozen=True)
