@@ -114,8 +114,17 @@ The agent chooses among these tools on each step via native function-calling:
 
 ## Install
 
+For a reproducible development environment that matches CI, install
+[uv](https://docs.astral.sh/uv/) and use the committed lockfile:
+
 ```powershell
-python -m pip install -e ".[dev]"
+uv sync --all-extras
+```
+
+Or use pip:
+
+```powershell
+python -m pip install -e ".[dev,ui]"
 ```
 
 To permit one local PDF in a CLI run, opt in explicitly:
@@ -173,7 +182,6 @@ Flags: `-o/--out`, `-v/--verbose`, `--max-rounds`, `--max-sources`,
 A simple Streamlit web interface is included:
 
 ```powershell
-python -m pip install streamlit
 streamlit run ui/app.py          # or: .\run-ui.ps1
 ```
 
@@ -209,12 +217,14 @@ and integration tests cover examples, boundaries, and the end-to-end flow.
 ## Develop
 
 ```powershell
-ruff check src tests     # lint
-mypy src                 # type-check
-pytest                   # tests
+uv run ruff check src tests ui          # lint
+uv run python -m compileall -q src ui   # compile-check
+uv run mypy src                         # type-check
+uv run pytest                           # tests
 ```
 
-CI runs all three on Python 3.11-3.13 via GitHub Actions (`.github/workflows/ci.yml`).
+CI verifies `uv.lock` and runs all four checks on Python 3.11-3.13 via GitHub
+Actions (`.github/workflows/ci.yml`).
 
 ## Build & distribute
 

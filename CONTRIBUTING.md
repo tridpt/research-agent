@@ -6,20 +6,24 @@ conventions that keep the codebase consistent and reliable.
 ## Development setup
 
 ```powershell
-python -m pip install -e ".[dev]"
+uv sync --all-extras
 ```
+
+`uv.lock` is committed so this matches CI exactly. If you do not use uv, run
+`python -m pip install -e ".[dev,ui]"` instead.
 
 ## Before you commit
 
-All three must pass (CI enforces them on Python 3.11–3.13):
+All four must pass (CI enforces them on Python 3.11–3.13):
 
 ```powershell
-ruff check src tests     # lint + import sorting
-mypy src                 # static type checking
-pytest                   # tests (incl. property-based)
+uv run ruff check src tests ui          # lint + import sorting
+uv run python -m compileall -q src ui   # syntax check
+uv run mypy src                         # static type checking
+uv run pytest                           # tests (incl. property-based and UI smoke)
 ```
 
-`ruff check --fix src tests` auto-fixes most lint issues.
+`uv run ruff check --fix src tests ui` auto-fixes most lint issues.
 
 ## Code conventions
 
@@ -39,9 +43,9 @@ pytest                   # tests (incl. property-based)
 - Add a **property-based test** (hypothesis, ≥100 examples) when you introduce a
   new pure function with a universal invariant. Tag it:
   `# Feature: research-agent, Property N: <description>`.
-- The UI (`ui/`) is not covered by the test suite — if you change it, at least
-  run `python -c "import ast; ast.parse(open('ui/app.py',encoding='utf-8').read())"`
-  and launch it once.
+- The UI has an offline startup smoke test in `tests/test_ui_smoke.py`. Update
+  it when changing initial UI controls; still launch the app manually for
+  interaction changes that need visual review.
 
 ## Adding a new agent tool
 
