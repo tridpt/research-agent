@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .models import SearchResult
+from .source_quality import rank_search_results
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,7 @@ def parse_search_results(payload: Any) -> tuple[SearchResult, ...]:
             or ""
         )
         out.append(SearchResult(title=str(title), url=str(url), snippet=str(snippet)))
-    return tuple(out)
+    return rank_search_results(out)
 
 
 class HttpSearchTool:

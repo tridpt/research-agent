@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .models import Report
+from .source_quality import source_quality_summary
 
 
 def render_markdown(report: Report) -> str:
@@ -18,7 +19,11 @@ def render_markdown(report: Report) -> str:
     lines.append("")
     if report.sources:
         for i, src in enumerate(report.sources, start=1):
-            lines.append(f"{i}. [{src.url}]({src.url})")
+            quality = source_quality_summary(src)
+            lines.append(
+                f"{i}. [{src.url}]({src.url}) — "
+                f"Quality: {quality.label} ({quality.score}/100; {quality.reason})"
+            )
     else:
         lines.append("_No sources were collected._")
     lines.append("")

@@ -76,6 +76,10 @@ reason about.
 - **Source diversity**: encourages at least `--min-domains` distinct domains and
   never collects more than `--max-per-domain` pages from one site. If the model
   tries to finish too early, the agent auto-reads one more new-domain source.
+- **Source-quality signals**: ranks official/academic domains above social or
+  user-generated platforms, then labels each fetched source using its domain
+  type and the amount of extractable evidence. These labels are transparent
+  heuristics, not fact-checks.
 - **Smart retry/backoff**: honors a provider `Retry-After` header on 429/503,
   otherwise uses capped exponential backoff.
 

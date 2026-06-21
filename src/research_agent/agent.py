@@ -35,6 +35,7 @@ from .models import (
     TransitionKind,
 )
 from .search_tool import SearchTool
+from .source_quality import assess_source
 from .tools import TOOL_SCHEMAS
 
 SYSTEM_PROMPT = (
@@ -161,7 +162,7 @@ def build_messages(
     if search_results:
         read_urls = {s.url for s in sources}
         listing = "\n".join(
-            f"- {r.title} | URL: {r.url}{' [ALREADY READ]' if r.url in read_urls else ''} | {r.snippet}"
+            _format_search_result(r, r.url in read_urls)
             for r in search_results
         )
         messages.append(
@@ -277,6 +278,7 @@ def run_session(
                     if r.url not in known:
                         state.search_results.append(r)
                         known.add(r.url)
+                state.search_results.sort(key=lambda result: assess_source(result.url).score, reverse=True)
         elif decision.action is ActionType.READ:
             emit(_action_event(state, decision))
             target = decision.url or ""
@@ -415,6 +417,15 @@ def _tool_schemas_for_session(allowed_pdf_paths: Sequence[Path]) -> list[dict]:
     if allowed_pdf_paths:
         return TOOLS
     return [tool for tool in TOOLS if tool["function"]["name"] != "read_pdf"]
+
+
+def _format_search_result(result: SearchResult, already_read: bool) -> str:
+    quality = assess_source(result.url)
+    read_marker = " [ALREADY READ]" if already_read else ""
+    return (
+        f"- {result.title} | URL: {result.url}{read_marker} | "
+        f"QUALITY: {quality.label} ({quality.reason}) | {result.snippet}"
+    )
 
 
 def _domain_count(sources: Sequence[Source], url: str) -> int:

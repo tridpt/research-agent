@@ -51,6 +51,7 @@ from research_agent.search_tool import (  # noqa: E402
     FallbackSearchTool,
     TavilySearchTool,
 )
+from research_agent.source_quality import assess_source, source_quality_summary  # noqa: E402
 from research_agent.synthesizer import synthesize, synthesize_stream  # noqa: E402
 from research_agent.url_safety import public_http_url_error  # noqa: E402
 from research_agent.usage import UsageTracker, format_usage  # noqa: E402
@@ -99,6 +100,7 @@ PRESETS = {
     "OpenAI": ("https://api.openai.com/v1", "gpt-4o-mini"),
     "Khác (tùy chỉnh)": ("", ""),
 }
+QUALITY_LABELS_VI = {"high": "Cao", "medium": "Trung bình", "low": "Thấp"}
 
 st.set_page_config(page_title="Research Agent", page_icon="🔎", layout="wide")
 st.title("🔎 Research Agent")
@@ -397,7 +399,13 @@ if run_clicked:
         markdown = render_markdown(report)
         # Keep source URL + a content preview for the "source preview" feature.
         sources = [
-            {"url": s.url, "preview": (s.content or "")[:1500]}
+            {
+                "url": s.url,
+                "preview": (s.content or "")[:1500],
+                "quality": source_quality_summary(s).label,
+                "quality_score": str(source_quality_summary(s).score),
+                "quality_reason": source_quality_summary(s).reason,
+            }
             for s in report.sources
         ]
 
@@ -457,8 +465,17 @@ if history:
     if not latest["sources"]:
         st.caption("Không có nguồn nào.")
     for i, s in enumerate(latest["sources"], 1):
-        with st.expander(f"{i}. {s['url']}"):
+        legacy_quality = assess_source(s["url"], s.get("preview"))
+        quality = s.get("quality", legacy_quality.label)
+        score = s.get("quality_score", str(legacy_quality.score))
+        reason = s.get("quality_reason", legacy_quality.reason)
+        quality_label = QUALITY_LABELS_VI.get(quality, "Chưa rõ")
+        with st.expander(f"{i}. {s['url']} · {quality_label} ({score}/100)"):
             st.link_button("🔗 Mở trang gốc", s["url"])
+            if s.get("quality_reason"):
+                st.caption("Đánh giá tự động (tham khảo): " + s["quality_reason"])
+            if not s.get("quality_reason") and reason:
+                st.caption("Automatic quality estimate: " + reason)
             preview = s.get("preview") or ""
             if preview:
                 st.caption("Trích đoạn nội dung agent đã đọc:")
