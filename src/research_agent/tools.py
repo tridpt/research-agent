@@ -156,4 +156,29 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stock",
+            "description": (
+                "Get the latest available stock/index quote (price, daily range, "
+                "volume) for a ticker symbol. Use exchange suffixes when needed, "
+                "e.g. 'aapl.us', 'btc.v', '^spx'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "The ticker symbol, e.g. 'aapl.us' or '^spx'.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why the stock data is needed.",
+                    },
+                },
+                "required": ["symbol"],
+            },
+        },
+    },
 ]

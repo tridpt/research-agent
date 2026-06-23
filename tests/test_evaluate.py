@@ -1,7 +1,13 @@
 """Tests for the evaluation harness."""
 from __future__ import annotations
 
-from research_agent.evaluate import aggregate, evaluate_report
+from research_agent.evaluate import (
+    aggregate,
+    compare_modes,
+    evaluate_modes,
+    evaluate_report,
+    format_comparison_markdown,
+)
 from research_agent.models import Citation, Report, Source
 
 
@@ -55,3 +61,42 @@ def test_aggregate_empty() -> None:
     agg = aggregate([])
     assert agg["avg_sources"] == 0.0
     assert agg["grounded_rate"] == 0.0
+    assert agg["info_rate"] == 0.0
+
+
+def test_evaluate_report_averages_source_quality() -> None:
+    m = evaluate_report(_report(["https://example.gov/data", "https://reddit.com/r/x"], []))
+    # One official (high) + one social (low) domain -> a mid-range average.
+    assert 0.0 < m.avg_source_quality < 100.0
+
+
+def test_evaluate_modes_runs_each_runner_over_questions() -> None:
+    def normal(q: str) -> Report:
+        return _report(["https://a.com"], ["https://a.com"], body=f"answer to {q}")
+
+    def reflect(q: str) -> Report:
+        return _report(["https://a.com", "https://b.com"], ["https://a.com", "https://b.com"])
+
+    results = evaluate_modes(["q1", "q2"], {"normal": normal, "reflect": reflect})
+    assert set(results) == {"normal", "reflect"}
+    assert len(results["normal"]) == 2
+    assert results["reflect"][0].n_domains == 2
+
+
+def test_compare_and_format_comparison_markdown() -> None:
+    results = evaluate_modes(
+        ["q"],
+        {
+            "normal": lambda q: _report(["https://a.com"], ["https://a.com"]),
+            "reflect": lambda q: _report(["https://a.com", "https://b.com"], ["https://a.com"]),
+        },
+    )
+    summary = compare_modes(results)
+    table = format_comparison_markdown(summary)
+    assert "| Mode |" in table
+    assert "normal" in table
+    assert "reflect" in table
+
+
+def test_format_comparison_markdown_handles_empty() -> None:
+    assert "No evaluation results" in format_comparison_markdown({})

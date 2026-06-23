@@ -14,6 +14,7 @@ from .config import resolve_settings
 from .errors import ConfigError, LLMError, ReportWriteError
 from .fetch_tool import FetchTool, HttpFetchTool
 from .llm import OpenAICompatibleProvider
+from .memory import MemoryStore, format_memory_directive
 from .models import Report
 from .multi_agent import run_multi_agent
 from .observability import make_emitter
@@ -72,6 +73,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reflect", action="store_true", help="Enable self-critique: review the draft and research gaps.")
     p.add_argument("--reflect-iterations", type=int, dest="reflect_iterations", default=2, help="Max reflection revision rounds.")
     p.add_argument("--multi-agent", action="store_true", dest="multi_agent", help="Use a planner/researcher/writer agent team.")
+    p.add_argument(
+        "--memory",
+        action="store_true",
+        help="Recall relevant past research and remember this run's result.",
+    )
+    p.add_argument(
+        "--memory-file",
+        dest="memory_file",
+        help="Path to the long-term memory store (default: .research_agent_memory.json).",
+    )
     p.add_argument("--model", dest="model")
     p.add_argument("--provider", dest="provider")
     return p
@@ -89,6 +100,37 @@ def _cli_overrides(args: argparse.Namespace) -> Mapping[str, object]:
 def _default_output_path(question: str) -> Path:
     slug = "".join(c if c.isalnum() else "-" for c in question.lower())[:40].strip("-") or "report"
     return Path(f"research-{slug}.md")
+
+
+def _build_search_and_fetch(settings, use_cache: bool = True) -> tuple[SearchTool, FetchTool]:
+    """Wire the search (with provider fallback) and fetch (optionally cached) tools.
+
+    Shared by the CLI and the evaluation benchmark so both use identical I/O.
+    Provider order: Tavily (if keyed) -> custom HTTP endpoint (if set) ->
+    DuckDuckGo (free, always available as the final fallback).
+    """
+    providers: list[SearchTool] = []
+    tavily_key = os.environ.get("RESEARCH_AGENT_TAVILY_API_KEY")
+    if tavily_key:
+        providers.append(TavilySearchTool(api_key=tavily_key, max_results=settings.budget.max_sources))
+    search_endpoint = os.environ.get("RESEARCH_AGENT_SEARCH_ENDPOINT")
+    if search_endpoint:
+        providers.append(HttpSearchTool(endpoint=search_endpoint, api_key=settings.search_api_key))
+    providers.append(DuckDuckGoSearchTool(max_results=settings.budget.max_sources))
+    search: SearchTool = FallbackSearchTool(providers)
+
+    fetch: FetchTool = HttpFetchTool(
+        blocked_domains=settings.blocked_domains,
+        per_source_char_limit=settings.per_source_char_limit,
+    )
+    if use_cache:
+        cache_dir = settings.cache_dir or Path(".research_agent_cache")
+        fetch = CachingFetchTool(
+            fetch,
+            FetchCache(cache_dir, ttl_seconds=settings.cache_ttl),
+            url_validator=public_http_url_error,
+        )
+    return search, fetch
 
 
 def _force_utf8_output() -> None:
@@ -121,33 +163,21 @@ def main(argv: Sequence[str]) -> int:
     )
     llm = RetryingLLMProvider(base_provider, max_attempts=settings.max_llm_attempts)
 
-    # Build a search tool with automatic fallback across providers. Order:
-    #   1. Tavily (if RESEARCH_AGENT_TAVILY_API_KEY is set) - AI-oriented results
-    #   2. Custom HTTP endpoint (if RESEARCH_AGENT_SEARCH_ENDPOINT is set)
-    #   3. DuckDuckGo (free, no key) - always available as the final fallback
-    providers: list[SearchTool] = []
-    tavily_key = os.environ.get("RESEARCH_AGENT_TAVILY_API_KEY")
-    if tavily_key:
-        providers.append(TavilySearchTool(api_key=tavily_key, max_results=settings.budget.max_sources))
-    search_endpoint = os.environ.get("RESEARCH_AGENT_SEARCH_ENDPOINT")
-    if search_endpoint:
-        providers.append(HttpSearchTool(endpoint=search_endpoint, api_key=settings.search_api_key))
-    providers.append(DuckDuckGoSearchTool(max_results=settings.budget.max_sources))
-    search = FallbackSearchTool(providers)
-    fetch: FetchTool = HttpFetchTool(
-        blocked_domains=settings.blocked_domains,
-        per_source_char_limit=settings.per_source_char_limit,
-    )
-    # Wrap with a persistent URL cache (on by default unless --no-cache) so
-    # repeated reads of the same page across sessions are served from disk.
-    if not getattr(args, "no_cache", False):
-        cache_dir = settings.cache_dir or Path(".research_agent_cache")
-        fetch = CachingFetchTool(
-            fetch,
-            FetchCache(cache_dir, ttl_seconds=settings.cache_ttl),
-            url_validator=public_http_url_error,
-        )
+    # Build search (provider fallback) and fetch (cached unless --no-cache).
+    search, fetch = _build_search_and_fetch(settings, use_cache=not getattr(args, "no_cache", False))
     emit = make_emitter(settings.verbose)
+
+    # Long-term memory (opt-in): recall relevant past research as trusted
+    # background, and remember this run afterwards.
+    memory_store: MemoryStore | None = None
+    memory_directive: str | None = None
+    if getattr(args, "memory", False):
+        memory_path = Path(getattr(args, "memory_file", None) or ".research_agent_memory.json")
+        memory_store = MemoryStore(memory_path)
+        recalled = memory_store.recall(question)
+        memory_directive = format_memory_directive(recalled) or None
+        if memory_directive and settings.verbose:
+            print(f"Recalled {len(recalled)} related past result(s) from memory.", file=sys.stderr)
 
     try:
         if getattr(args, "multi_agent", False):
@@ -172,6 +202,7 @@ def main(argv: Sequence[str]) -> int:
                 clock=time.time,
                 emit=emit,
                 max_iterations=getattr(args, "reflect_iterations", 2),
+                directive=memory_directive,
             )
         else:
             report = run_session(
@@ -183,18 +214,41 @@ def main(argv: Sequence[str]) -> int:
                 synthesize_fn=synthesize,
                 clock=time.time,
                 emit=emit,
+                directive=memory_directive,
             )
     except LLMError as exc:
         print(f"LLM error: {exc}", file=sys.stderr)
         return 3
 
+    if memory_store is not None:
+        memory_store.add(report)
+
     markdown = render_markdown(report)
     out_path = settings.output_path or _default_output_path(question)
-    try:
-        written = write_report(markdown, out_path)
-    except ReportWriteError as exc:
-        print(f"Failed to write report: {exc}", file=sys.stderr)
-        return 4
+
+    # Direct PDF export when the output path ends in .pdf; otherwise Markdown.
+    if out_path.suffix.lower() == ".pdf":
+        from .pdf_export import PdfExportError, write_pdf
+
+        try:
+            written = write_pdf(question, markdown, out_path)
+        except PdfExportError as exc:
+            fallback = out_path.with_suffix(".md")
+            print(f"PDF export unavailable ({exc}); writing Markdown instead.", file=sys.stderr)
+            try:
+                written = write_report(markdown, fallback)
+            except ReportWriteError as write_exc:
+                print(f"Failed to write report: {write_exc}", file=sys.stderr)
+                return 4
+        except OSError as exc:
+            print(f"Failed to write PDF: {exc}", file=sys.stderr)
+            return 4
+    else:
+        try:
+            written = write_report(markdown, out_path)
+        except ReportWriteError as exc:
+            print(f"Failed to write report: {exc}", file=sys.stderr)
+            return 4
 
     print(f"\nReport written to: {written}")
     print("\n--- Summary ---")

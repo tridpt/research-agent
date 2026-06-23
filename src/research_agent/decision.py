@@ -64,5 +64,11 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
             return InvalidDecision(reason="GET_WEATHER requires a non-empty 'location'")
         return AgentDecision(action=action, location=location.strip(), reasoning=reasoning)
 
+    if action is ActionType.GET_STOCK:
+        symbol = raw.get("symbol")
+        if not isinstance(symbol, str) or not symbol.strip():
+            return InvalidDecision(reason="GET_STOCK requires a non-empty 'symbol'")
+        return AgentDecision(action=action, symbol=symbol.strip(), reasoning=reasoning)
+
     # FINISH needs no extra parameters.
     return AgentDecision(action=ActionType.FINISH, reasoning=reasoning)

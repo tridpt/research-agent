@@ -78,10 +78,12 @@ reason about.
 - **Source diversity**: encourages at least `--min-domains` distinct domains and
   never collects more than `--max-per-domain` pages from one site. If the model
   tries to finish too early, the agent auto-reads one more new-domain source.
-- **Source-quality signals**: ranks official/academic domains above social or
-  user-generated platforms, then labels each fetched source using its domain
-  type and the amount of extractable evidence. These labels are transparent
-  heuristics, not fact-checks.
+- **Source-quality signals**: ranks official/academic (`.gov`/`.edu`/`.int`)
+  domains highest, then a curated set of established/reputable sources (major
+  news, reference works, scholarly publishers), above the general web, and below
+  social or user-generated platforms. Each fetched source is labeled by its
+  domain type and the amount of extractable evidence. These labels are
+  transparent heuristics, not fact-checks.
 - **Smart retry/backoff**: honors a provider `Retry-After` header on 429/503,
   otherwise uses capped exponential backoff.
 
@@ -93,6 +95,8 @@ The agent chooses among these tools on each step via native function-calling:
   allow-listed operators) for precise numbers in the report.
 - **now** — get the current date/time (for "latest"/"today"/recency questions).
 - **get_weather** — retrieve current weather from wttr.in.
+- **get_stock** — retrieve the latest stock/index quote (price, day range,
+  volume) from Yahoo Finance's public endpoint (no API key).
 - **read_pdf** — read a PDF explicitly selected by the user for the current run.
 - **finish** — stop and synthesize the cited report.
 
@@ -107,6 +111,9 @@ The agent chooses among these tools on each step via native function-calling:
 - **Multi-agent** (`--multi-agent`): a planner splits the question into
   sub-questions, a researcher gathers sources for each, and a writer synthesizes
   one cited report.
+- **Long-term memory** (`--memory`): recalls relevant past research from a local
+  store as trusted background context before a run, and remembers the result
+  afterwards (configure the file with `--memory-file`).
 
 > Tip: on providers with a low tokens-per-minute limit (e.g. Groq free tier),
 > lower `RESEARCH_AGENT_PER_SOURCE_CHARS` (e.g. 1500-2500) and `--max-sources`
@@ -125,6 +132,13 @@ Or use pip:
 
 ```powershell
 python -m pip install -e ".[dev,ui]"
+```
+
+For direct PDF export, also install the optional `pdf` extra (it pulls in
+`fpdf2`):
+
+```powershell
+python -m pip install -e ".[pdf]"
 ```
 
 To permit one local PDF in a CLI run, opt in explicitly:
@@ -175,7 +189,14 @@ search API instead, set `RESEARCH_AGENT_SEARCH_ENDPOINT` (and optionally
 Flags: `-o/--out`, `-v/--verbose`, `--max-rounds`, `--max-sources`,
 `--max-seconds`, `--min-domains`, `--max-per-domain`, `--cache-dir`,
 `--no-cache`, `--reflect`, `--reflect-iterations`, `--multi-agent`,
-`--model`, `--provider`.
+`--memory`, `--memory-file`, `--model`, `--provider`.
+
+Give the output path a `.pdf` extension to export a PDF directly (needs the
+optional `pdf` extra; falls back to Markdown if no PDF font is available):
+
+```powershell
+research-agent "Compare gRPC and REST" -o report.pdf
+```
 
 ### Web UI
 
@@ -213,6 +234,16 @@ python -m pytest
 
 Property-based tests (hypothesis) validate the 10 correctness properties; unit
 and integration tests cover examples, boundaries, and the end-to-end flow.
+
+## Benchmark modes
+
+Compare the modes (normal / reflect / multi-agent) on a question set with
+deterministic grounding metrics (sources, domains, citations, average source
+quality, grounded/info rates):
+
+```powershell
+research-agent-eval --modes normal,reflect,multi-agent
+```
 
 ## Develop
 
@@ -253,15 +284,21 @@ src/research_agent/
 ├── search_tool.py    # web search behind SearchTool (incl. DuckDuckGo)
 ├── fetch_tool.py     # download + extract behind FetchTool
 ├── cache.py          # persistent URL fetch cache + CachingFetchTool
+├── memory.py         # long-term memory store across sessions (--memory)
 ├── llm.py            # LLMProvider protocol + OpenAI-compatible client
 ├── decision.py       # parse_decision (pure)
 ├── retry.py          # retry policy (pure counting) + RetryingLLMProvider
 ├── agent.py          # decide_transition + build_messages (pure) + run_session
 ├── citations.py      # validate_citations (pure)
 ├── render.py         # render_markdown (pure)
+├── pdf_export.py     # markdown -> PDF (pure parsing + fpdf2 rendering)
 ├── synthesizer.py    # synthesize report
 ├── reflection.py     # self-critique loop (--reflect)
 ├── multi_agent.py    # planner/researcher/writer team (--multi-agent)
+├── calculator.py     # safe AST arithmetic for the calculate tool
+├── stock.py          # stock-quote tool (Yahoo Finance, no key)
+├── source_quality.py # explainable source-credibility ranking
+├── evaluate.py       # deterministic metrics + cross-mode benchmark
 ├── tools.py          # native function-calling tool schemas
 ├── observability.py  # render_trace (pure) + TraceEmitter
 └── report_writer.py  # write_report
@@ -271,13 +308,14 @@ src/research_agent/
 
 Ideas for future versions (contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)):
 
-- [ ] More agent tools (e.g. stock data)
-- [ ] Source-credibility ranking (prefer gov/edu/established domains)
-- [ ] Long-term memory across sessions (reference past research)
-- [ ] Direct PDF export (currently via HTML → print)
-- [ ] Side-by-side model comparison in the web UI
+- [x] More agent tools (e.g. stock data) — added `get_stock` (Yahoo Finance)
+- [x] Source-credibility ranking (prefer gov/edu/established domains)
+- [x] Long-term memory across sessions (`--memory`)
+- [x] Direct PDF export (`-o report.pdf`, or the UI's PDF button)
+- [x] Side-by-side model comparison in the web UI
+- [x] Automated quality evaluation across modes (`research-agent-eval`)
 - [ ] Streamlit Community Cloud deployment for a one-click live demo
-- [ ] Automated quality evaluation across modes (built on `evaluate.py`)
+- [ ] Source-credibility ranking tuned with per-domain reputation data
 
 ## License
 

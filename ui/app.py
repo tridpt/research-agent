@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import (  # noqa: E402
     add_history_item,
     load_history,
+    parse_model_list,
     report_to_html,
     save_history,
 )
@@ -39,6 +40,7 @@ from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
 from research_agent.config import resolve_settings  # noqa: E402
 from research_agent.error_diagnostics import diagnose_llm_error  # noqa: E402
 from research_agent.errors import ConfigError, LLMError  # noqa: E402
+from research_agent.evaluate import evaluate_report  # noqa: E402
 from research_agent.fetch_tool import HttpFetchTool  # noqa: E402
 from research_agent.llm import Message, OpenAICompatibleProvider  # noqa: E402
 from research_agent.models import Report, SessionState, TraceEventType  # noqa: E402
@@ -77,6 +79,10 @@ def render_step_vi(event) -> str:
             return "✅ Đã đủ thông tin — bắt đầu viết báo cáo"
         if action == "calculate":
             return f"🧮 Đang tính toán: {detail.get('expression', '')}"
+        if action == "get_weather":
+            return f"🌦️ Đang lấy thời tiết: {detail.get('location', '')}"
+        if action == "get_stock":
+            return f"📈 Đang lấy dữ liệu chứng khoán: {detail.get('symbol', '')}"
         if action == "now":
             return "🗓️ Đang lấy ngày giờ hiện tại"
         if action == "plan":
@@ -472,8 +478,8 @@ if history:
     if latest.get("usage"):
         st.caption(f"🧮 {latest['usage']}")
 
-    # --- Export: Markdown / HTML (HTML printable to PDF) ---
-    c1, c2 = st.columns(2)
+    # --- Export: Markdown / HTML / PDF ---
+    c1, c2, c3 = st.columns(3)
     with c1:
         st.download_button(
             "⬇️ Tải Markdown (.md)",
@@ -491,6 +497,26 @@ if history:
             use_container_width=True,
             help="Mở file HTML rồi dùng 'In → Lưu thành PDF' của trình duyệt.",
         )
+    with c3:
+        try:
+            from research_agent.pdf_export import render_pdf_bytes
+
+            pdf_bytes = render_pdf_bytes(latest["question"], latest["markdown"])
+            st.download_button(
+                "⬇️ Tải PDF (.pdf)",
+                data=pdf_bytes,
+                file_name="bao-cao.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                help="Xuất PDF trực tiếp (hỗ trợ tiếng Việt).",
+            )
+        except Exception:  # noqa: BLE001 - fall back gracefully to HTML export
+            st.button(
+                "⬇️ Tải PDF (.pdf)",
+                disabled=True,
+                use_container_width=True,
+                help="Cần gói 'fpdf2' và một font Unicode. Hãy dùng nút HTML rồi in ra PDF.",
+            )
 
     # --- Source preview: click to expand the text the agent actually read ---
     st.subheader("📚 Nguồn đã dùng")
@@ -579,6 +605,74 @@ if history:
                         )
                 st.markdown(answer)
             st.session_state["chat"].append({"role": "assistant", "content": answer})
+
+
+# --------------------------------------------------------------------------
+# Side-by-side model comparison
+# --------------------------------------------------------------------------
+st.divider()
+with st.expander("⚖️ So sánh nhiều model song song"):
+    st.caption(
+        "Chạy cùng một câu hỏi qua nhiều model (chế độ thường) và xem báo cáo "
+        "cùng các chỉ số bên cạnh nhau. Mỗi model dùng API key/base URL ở thanh bên."
+    )
+    compare_question = st.text_input(
+        "Câu hỏi để so sánh",
+        value=question or "",
+        key="compare_question",
+    )
+    compare_models_text = st.text_input(
+        "Danh sách model (phân tách bằng dấu phẩy, tối đa 4)",
+        value=model,
+        key="compare_models",
+        help="Ví dụ: openai/gpt-oss-20b, llama-3.3-70b-versatile",
+    )
+    if st.button("⚖️ Chạy so sánh", use_container_width=True, key="run_compare"):
+        models_to_compare = parse_model_list(compare_models_text)
+        if not compare_question.strip():
+            st.error("Vui lòng nhập câu hỏi để so sánh.")
+        elif not api_key.strip():
+            st.error("Vui lòng nhập API key ở thanh bên.")
+        elif len(models_to_compare) < 2:
+            st.error("Hãy nhập ít nhất 2 model khác nhau để so sánh.")
+        else:
+            try:
+                base_settings = _build_settings()
+            except ConfigError as exc:
+                st.error(f"Lỗi cấu hình: {exc}")
+                st.stop()
+            search = _build_search(base_settings)
+            cols = st.columns(len(models_to_compare))
+            for col, model_name in zip(cols, models_to_compare, strict=False):
+                with col:
+                    st.markdown(f"**{model_name}**")
+                    run_settings = replace(base_settings, model=model_name)
+                    run_llm = _build_llm(run_settings)
+                    run_fetch = CachingFetchTool(
+                        HttpFetchTool(
+                            blocked_domains=run_settings.blocked_domains,
+                            per_source_char_limit=run_settings.per_source_char_limit,
+                        ),
+                        FetchCache(Path(".research_agent_cache"), ttl_seconds=run_settings.cache_ttl),
+                        url_validator=public_http_url_error,
+                    )
+                    synth_fn = partial(synthesize, language=lang_code) if lang_code else synthesize
+                    try:
+                        with st.spinner(f"Đang chạy {model_name}..."):
+                            cmp_report = run_session(
+                                compare_question, run_settings, run_llm, search, run_fetch,
+                                synth_fn, time.time, CollectingEmitter(verbose=False),
+                            )
+                    except LLMError as exc:
+                        diagnosis = diagnose_llm_error(exc)
+                        st.error(f"{diagnosis.title_vi}")
+                        continue
+                    metrics = evaluate_report(cmp_report)
+                    st.caption(
+                        f"📚 {metrics.n_sources} nguồn · 🌐 {metrics.n_domains} tên miền · "
+                        f"🔖 {metrics.n_citations} trích dẫn · ⭐ {metrics.avg_source_quality:.0f}/100"
+                    )
+                    st.markdown(render_markdown(cmp_report))
 
 
 # --------------------------------------------------------------------------

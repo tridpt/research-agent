@@ -25,6 +25,50 @@ _LOW_EVIDENCE_HOSTS = {
 }
 _DIRECT_DATA_HOSTS = {"wttr.in"}
 
+# Curated, established/reputable sources (major news, reference works, and
+# scholarly publishers). This is a transparent heuristic, not a fact-check: it
+# nudges the agent toward sources with editorial standards above the open web,
+# while still ranking official ``.gov``/``.edu``/``.int`` domains highest.
+_ESTABLISHED_HOSTS = {
+    # Wire services & established news
+    "apnews.com",
+    "reuters.com",
+    "bbc.com",
+    "bbc.co.uk",
+    "npr.org",
+    "theguardian.com",
+    "nytimes.com",
+    "wsj.com",
+    "economist.com",
+    "ft.com",
+    "nationalgeographic.com",
+    # Reference works
+    "wikipedia.org",
+    "britannica.com",
+    # Scholarly publishers & repositories
+    "nature.com",
+    "science.org",
+    "sciencedirect.com",
+    "springer.com",
+    "link.springer.com",
+    "ieee.org",
+    "acm.org",
+    "arxiv.org",
+    "jstor.org",
+    "pubmed.ncbi.nlm.nih.gov",
+    # Authoritative technical / standards bodies
+    "mozilla.org",
+    "developer.mozilla.org",
+    "python.org",
+    "w3.org",
+    "ietf.org",
+}
+
+
+def _host_matches(host: str, domains: frozenset[str] | set[str]) -> bool:
+    """Pure: True iff ``host`` equals or is a subdomain of any listed domain."""
+    return any(host == domain or host.endswith("." + domain) for domain in domains)
+
 
 @dataclass(frozen=True)
 class SourceQuality:
@@ -55,10 +99,13 @@ def assess_source(url: str, content: str | None = None) -> SourceQuality:
     if is_official:
         score += 35
         reasons.append("official or academic domain")
-    elif host in _DIRECT_DATA_HOSTS:
+    elif _host_matches(host, _DIRECT_DATA_HOSTS):
         score += 20
         reasons.append("direct data provider")
-    elif any(host == domain or host.endswith("." + domain) for domain in _LOW_EVIDENCE_HOSTS):
+    elif _host_matches(host, _ESTABLISHED_HOSTS):
+        score += 18
+        reasons.append("established or reputable source")
+    elif _host_matches(host, _LOW_EVIDENCE_HOSTS):
         score -= 25
         reasons.append("social or user-generated platform")
     else:

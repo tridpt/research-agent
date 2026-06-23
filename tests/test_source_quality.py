@@ -45,6 +45,15 @@ def test_rank_search_results_places_better_domain_first() -> None:
     assert rank_search_results([social, official]) == (official, social)
 
 
+def test_established_source_ranks_above_general_and_below_official() -> None:
+    official = assess_source("https://nih.gov/study")
+    established = assess_source("https://www.reuters.com/world/article")
+    general = assess_source("https://some-random-blog.example/post")
+
+    assert "established or reputable source" in established.reason
+    assert official.score > established.score > general.score
+
+
 def test_agent_and_report_expose_source_quality() -> None:
     source = Source(url="https://example.gov/data", content="data " * 200, fetched_at=0.0)
     messages = build_messages("q", [], [SearchResult("Agency", source.url, "data")])

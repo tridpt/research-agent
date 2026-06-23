@@ -144,19 +144,22 @@ def run_with_reflection(
     emit: Any,
     max_iterations: int = 2,
     accept_score: int = 8,
+    directive: str | None = None,
 ) -> Report:
     """Run the base agent, then iteratively self-critique and re-research gaps.
 
     Reuses the accumulated SessionState across iterations so earlier sources are
     not refetched. Always terminates: bounded by ``max_iterations`` and the base
-    session's own research budget.
+    session's own research budget. An optional ``directive`` (e.g. recalled
+    long-term memory) seeds the first research pass as trusted context.
     """
     from .agent import run_session
     from .models import SessionState
 
     state = SessionState(question=question, started_at=clock())
     report = run_session(
-        question, settings, llm, search, fetch, synthesize_fn, clock, emit, initial_state=state
+        question, settings, llm, search, fetch, synthesize_fn, clock, emit,
+        initial_state=state, directive=directive,
     )
 
     iteration = 0

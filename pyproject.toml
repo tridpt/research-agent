@@ -43,13 +43,18 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.10",
     "streamlit>=1.30",
+    "fpdf2>=2.7",
 ]
 ui = [
     "streamlit>=1.30",
 ]
+pdf = [
+    "fpdf2>=2.7",
+]
 
 [project.scripts]
 research-agent = "research_agent.cli:run"
+research-agent-eval = "research_agent.evaluate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

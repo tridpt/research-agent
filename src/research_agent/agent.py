@@ -36,13 +36,15 @@ from .models import (
 )
 from .search_tool import SearchTool
 from .source_quality import assess_source
+from .stock import StockError, fetch_stock_quote
 from .tools import TOOL_SCHEMAS
 
 SYSTEM_PROMPT = (
     "You are an autonomous research agent. Your goal is to answer the user's "
     "research question by deciding, step by step, whether to SEARCH the web, "
     "READ a source, or FINISH and synthesize. You can also use GET_WEATHER "
-    "to get real-time weather. READ_PDF is available only for a PDF the user "
+    "to get real-time weather and GET_STOCK to get the latest stock/index "
+    "quote for a ticker symbol. READ_PDF is available only for a PDF the user "
     "explicitly selected. "
     "Use exactly one of the provided function tools for each decision. Do not "
     "reply with JSON text and never call a tool named JSON. "
@@ -384,6 +386,20 @@ def run_session(
                 )
             except Exception as exc:
                 emit(_error_event(state, f"get_weather error: {exc}"))
+        elif decision.action is ActionType.GET_STOCK:
+            emit(_action_event(state, decision))
+            try:
+                # Like weather, record the quote as a real source so the
+                # synthesizer can ground a numeric claim on it and FINISH.
+                stock_url, summary = fetch_stock_quote(decision.symbol or "")
+                note = f"Stock quote: {summary}"
+                state.tool_notes.append(note)
+                if not any(source.url == stock_url for source in state.sources):
+                    state.sources.append(
+                        Source(url=stock_url, content=note, fetched_at=clock())
+                    )
+            except StockError as exc:
+                emit(_error_event(state, f"get_stock error: {exc}"))
 
         state.rounds_used += 1
         emit(_round_event(state))
@@ -493,6 +509,8 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["path"] = decision.path
     if decision.location:
         detail["location"] = decision.location
+    if decision.symbol:
+        detail["symbol"] = decision.symbol
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,

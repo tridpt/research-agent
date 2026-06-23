@@ -23,6 +23,7 @@ class ActionType(Enum):
     NOW = "now"
     READ_PDF = "read_pdf"
     GET_WEATHER = "get_weather"
+    GET_STOCK = "get_stock"
 
 
 class TransitionKind(Enum):
@@ -103,6 +104,7 @@ class AgentDecision:
     expression: str | None = None
     path: str | None = None
     location: str | None = None
+    symbol: str | None = None
 
 
 @dataclass(frozen=True)

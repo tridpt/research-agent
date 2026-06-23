@@ -108,3 +108,21 @@ def report_to_html(question: str, markdown: str) -> str:
 <div id="content">{safe_body}</div>
 </body>
 </html>"""
+
+
+def parse_model_list(text: str, max_models: int = 4) -> list[str]:
+    """Parse a comma/newline-separated list of model names into a unique list.
+
+    Order is preserved, blanks and duplicates are removed, and the result is
+    capped at ``max_models`` so a side-by-side comparison stays manageable.
+    """
+    seen: set[str] = set()
+    models: list[str] = []
+    for raw in (text or "").replace("\n", ",").split(","):
+        name = raw.strip()
+        if name and name not in seen:
+            seen.add(name)
+            models.append(name)
+        if len(models) >= max_models:
+            break
+    return models
