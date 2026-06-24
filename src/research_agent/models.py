@@ -73,6 +73,8 @@ class Settings:
     cache_ttl: float = 0.0        # seconds; <=0 means entries never expire
     # Local PDFs are opt-in and must be selected by the user for this session.
     allowed_pdf_paths: tuple[Path, ...] = ()
+    # Report writing style: "brief" | "standard" | "deep".
+    report_style: str = "standard"
 
 
 # --------------------------------------------------------------------------

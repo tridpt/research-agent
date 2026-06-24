@@ -207,6 +207,13 @@ with st.sidebar:
     )
     lang_code = {"Tiếng Việt": "vi", "English": "en"}.get(lang_label)
 
+    style_label = st.radio(
+        "Độ dài báo cáo",
+        ["Tiêu chuẩn", "Ngắn gọn", "Chuyên sâu"],
+        help="Ngắn gọn: tóm tắt nhanh. Chuyên sâu: phân tích kỹ, nhiều mục.",
+    )
+    style_code = {"Ngắn gọn": "brief", "Tiêu chuẩn": "standard", "Chuyên sâu": "deep"}[style_label]
+
     st.divider()
     st.subheader("Giới hạn")
     max_rounds = st.slider("Số vòng tối đa", 2, 20, 8)
@@ -354,7 +361,7 @@ if run_clicked:
             steps_box.markdown("\n\n".join(steps[-25:]))
 
         emit = CollectingEmitter(verbose=True, on_event=_on_event)
-        synth_fn = partial(synthesize, language=lang_code) if lang_code else synthesize
+        synth_fn = partial(synthesize, language=lang_code, style=style_code)
 
         started = time.time()
         report = None
@@ -406,6 +413,7 @@ if run_clicked:
                 llm,
                 tool_notes=state.tool_notes,
                 language=lang_code,
+                style=style_code,
             )
             _result = {}
 
@@ -428,6 +436,7 @@ if run_clicked:
                 llm,
                 tool_notes=state.tool_notes,
                 language=lang_code,
+                style=style_code,
             )
             stream_area.empty()
 
@@ -656,7 +665,7 @@ with st.expander("⚖️ So sánh nhiều model song song"):
                         FetchCache(Path(".research_agent_cache"), ttl_seconds=run_settings.cache_ttl),
                         url_validator=public_http_url_error,
                     )
-                    synth_fn = partial(synthesize, language=lang_code) if lang_code else synthesize
+                    synth_fn = partial(synthesize, language=lang_code, style=style_code) if lang_code else partial(synthesize, style=style_code)
                     try:
                         with st.spinner(f"Đang chạy {model_name}..."):
                             cmp_report = run_session(

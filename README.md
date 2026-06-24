@@ -189,7 +189,14 @@ search API instead, set `RESEARCH_AGENT_SEARCH_ENDPOINT` (and optionally
 Flags: `-o/--out`, `-v/--verbose`, `--max-rounds`, `--max-sources`,
 `--max-seconds`, `--min-domains`, `--max-per-domain`, `--cache-dir`,
 `--no-cache`, `--reflect`, `--reflect-iterations`, `--multi-agent`,
-`--memory`, `--memory-file`, `--model`, `--provider`.
+`--memory`, `--memory-file`, `--style`, `--model`, `--provider`.
+
+Use `--style` to tune report length/depth: `brief` (short summary + bullets),
+`standard` (default), or `deep` (in-depth, sectioned analysis):
+
+```powershell
+research-agent "What is the CAP theorem?" --style brief
+```
 
 Give the output path a `.pdf` extension to export a PDF directly (needs the
 optional `pdf` extra; falls back to Markdown if no PDF font is available):

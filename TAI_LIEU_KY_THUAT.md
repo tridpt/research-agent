@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất PDF tùy chọn: `fpdf2`)
-- **Kiểm thử:** `pytest` + `hypothesis` (164 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (169 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -288,7 +288,8 @@ máy (để tiếng Việt hiển thị đúng); nếu thiếu `fpdf2` hoặc fo
 - `synthesize` — gọi LLM sinh báo cáo có trích dẫn từ nguồn; nếu không có nguồn
   trả báo cáo "không tìm thấy thông tin" (không bịa).
 - `synthesize_stream` — phiên bản streaming, yield từng đoạn rồi trả `Report`.
-- Hỗ trợ tham số `language` để ép ngôn ngữ báo cáo.
+- Hỗ trợ tham số `language` để ép ngôn ngữ báo cáo, và `style` (brief/standard/
+  deep) để điều chỉnh độ dài & độ sâu (`style_instruction` là hàm thuần).
 
 ### `citations.py` — Toàn vẹn trích dẫn
 `validate_citations(report, sources)` (thuần) — loại bỏ mọi trích dẫn không trỏ
@@ -453,6 +454,7 @@ Biến môi trường (hoặc đặt qua `.env` / cờ CLI):
 | `RESEARCH_AGENT_CACHE_DIR` | .research_agent_cache | Thư mục cache |
 | `RESEARCH_AGENT_CACHE_TTL` | 0 (vô hạn) | TTL cache (giây) |
 | `RESEARCH_AGENT_ROUND_DELAY` | 0 | Độ trễ giữa các vòng (giây) |
+| `RESEARCH_AGENT_STYLE` | standard | Độ dài báo cáo: brief / standard / deep |
 
 Thứ tự ưu tiên: **cờ CLI > biến môi trường > mặc định**.
 
@@ -482,20 +484,20 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-164 test, chia làm:
+169 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
   trạng thái + bảo đảm dừng, giới hạn retry, render trace).
 - **Unit** (`test_units.py`, `test_calculator.py`, `test_usage.py`,
   `test_evaluate.py`, `test_stock.py`, `test_memory.py`, `test_pdf_export.py`,
-  `test_source_quality.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_source_quality.py`, `test_report_style.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (164 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (169 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 

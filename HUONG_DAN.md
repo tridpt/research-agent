@@ -170,6 +170,7 @@ bạn không cần bật gì:
 | `--multi-agent` | Bật chế độ đội đa agent |
 | `--memory` | Nhớ kết quả nghiên cứu cũ và gợi lại khi gặp câu hỏi liên quan |
 | `--memory-file` | Đường dẫn file lưu bộ nhớ (mặc định `.research_agent_memory.json`) |
+| `--style` | Độ dài/độ sâu báo cáo: `brief` (ngắn), `standard` (mặc định), `deep` (chuyên sâu) |
 | `--no-cache` | Tắt bộ nhớ đệm (không dùng lại trang đã tải) |
 | `--cache-dir` | Thư mục lưu bộ nhớ đệm |
 | `--model` | Đổi mô hình cho lần chạy này |
@@ -196,6 +197,14 @@ liên quan ở các phiên sau, dùng làm ngữ cảnh nền (vẫn tự tìm n
 ```powershell
 .\run.ps1 "RAG là gì?" --memory -v
 .\run.ps1 "So sánh RAG và fine-tuning" --memory -v   # tận dụng lại lần trước
+```
+
+### Chọn độ dài báo cáo
+Dùng `--style` để chọn độ dài/độ sâu: `brief` (ngắn gọn), `standard` (mặc định),
+`deep` (chuyên sâu, chia mục rõ ràng):
+```powershell
+.\run.ps1 "Định lý CAP là gì?" --style brief
+.\run.ps1 "Phân tích kiến trúc microservices" --style deep -v
 ```
 
 ---
@@ -299,6 +308,7 @@ Trình duyệt sẽ tự mở tại `http://localhost:8501`. Nếu không, mở 
 ### Các tính năng của giao diện
 - **🌐 Ngôn ngữ báo cáo**: chọn tiếng Việt để báo cáo ra tiếng Việt dù nguồn là
   tiếng Anh.
+- **📏 Độ dài báo cáo**: chọn Ngắn gọn / Tiêu chuẩn / Chuyên sâu ở thanh bên.
 - **⬇️ Tải báo cáo**: dạng **Markdown**, **HTML**, hoặc **PDF trực tiếp** (nút
   PDF hỗ trợ tiếng Việt; nếu máy thiếu gói/font, dùng nút HTML rồi
   "In → Lưu thành PDF").

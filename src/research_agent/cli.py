@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 from pathlib import Path
 
 from .agent import run_session
@@ -85,6 +86,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--model", dest="model")
     p.add_argument("--provider", dest="provider")
+    p.add_argument(
+        "--style",
+        dest="report_style",
+        choices=["brief", "standard", "deep"],
+        help="Report length/depth: brief, standard (default), or deep.",
+    )
     return p
 
 
@@ -92,7 +99,7 @@ def _cli_overrides(args: argparse.Namespace) -> Mapping[str, object]:
     keys = [
         "output_path", "verbose", "max_rounds", "max_sources", "max_seconds",
         "model", "provider", "min_domains", "max_per_domain", "cache_dir",
-        "pdf_paths",
+        "pdf_paths", "report_style",
     ]
     return {k: getattr(args, k) for k in keys if getattr(args, k) is not None}
 
@@ -167,6 +174,9 @@ def main(argv: Sequence[str]) -> int:
     search, fetch = _build_search_and_fetch(settings, use_cache=not getattr(args, "no_cache", False))
     emit = make_emitter(settings.verbose)
 
+    # Apply the configured report style to every synthesis path.
+    synth_fn = partial(synthesize, style=settings.report_style)
+
     # Long-term memory (opt-in): recall relevant past research as trusted
     # background, and remember this run afterwards.
     memory_store: MemoryStore | None = None
@@ -187,7 +197,7 @@ def main(argv: Sequence[str]) -> int:
                 llm=llm,
                 search=search,
                 fetch=fetch,
-                synthesize_fn=synthesize,
+                synthesize_fn=synth_fn,
                 clock=time.time,
                 emit=emit,
             )
@@ -198,7 +208,7 @@ def main(argv: Sequence[str]) -> int:
                 llm=llm,
                 search=search,
                 fetch=fetch,
-                synthesize_fn=synthesize,
+                synthesize_fn=synth_fn,
                 clock=time.time,
                 emit=emit,
                 max_iterations=getattr(args, "reflect_iterations", 2),
@@ -211,7 +221,7 @@ def main(argv: Sequence[str]) -> int:
                 llm=llm,
                 search=search,
                 fetch=fetch,
-                synthesize_fn=synthesize,
+                synthesize_fn=synth_fn,
                 clock=time.time,
                 emit=emit,
                 directive=memory_directive,

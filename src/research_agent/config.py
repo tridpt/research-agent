@@ -31,6 +31,7 @@ ENV_MAX_PER_DOMAIN = "RESEARCH_AGENT_MAX_PER_DOMAIN"
 ENV_CACHE_DIR = "RESEARCH_AGENT_CACHE_DIR"
 ENV_CACHE_TTL = "RESEARCH_AGENT_CACHE_TTL"
 ENV_ROUND_DELAY = "RESEARCH_AGENT_ROUND_DELAY"
+ENV_STYLE = "RESEARCH_AGENT_STYLE"
 
 # Maps an optional setting key -> the env var that supplies it.
 _ENV_FOR = {
@@ -49,6 +50,7 @@ _ENV_FOR = {
     "cache_dir": ENV_CACHE_DIR,
     "cache_ttl": ENV_CACHE_TTL,
     "round_delay_seconds": ENV_ROUND_DELAY,
+    "report_style": ENV_STYLE,
 }
 
 
@@ -68,6 +70,7 @@ class Defaults:
     max_per_domain: int = 2
     cache_ttl: float = 0.0
     round_delay_seconds: float = 0.0
+    report_style: str = "standard"
 
 
 DEFAULTS = Defaults()
@@ -152,6 +155,10 @@ def resolve_settings(
     max_per_domain = _as_int(_resolve("max_per_domain", cli_overrides, env), defaults.max_per_domain)
     cache_ttl = _as_float(_resolve("cache_ttl", cli_overrides, env), defaults.cache_ttl)
     round_delay = _as_float(_resolve("round_delay_seconds", cli_overrides, env), defaults.round_delay_seconds)
+    style_raw = _resolve("report_style", cli_overrides, env)
+    report_style = str(style_raw).strip().lower() if style_raw else defaults.report_style
+    if report_style not in ("brief", "standard", "deep"):
+        report_style = defaults.report_style
     cache_raw = _resolve("cache_dir", cli_overrides, env)
     cache_dir = Path(str(cache_raw)) if cache_raw else None
     allowed_pdf_paths = _parse_paths(cli_overrides.get("pdf_paths"))
@@ -174,4 +181,5 @@ def resolve_settings(
         cache_ttl=cache_ttl,
         round_delay_seconds=round_delay,
         allowed_pdf_paths=allowed_pdf_paths,
+        report_style=report_style,
     )
