@@ -36,8 +36,8 @@ Markdown **có trích dẫn**.
 - **Giao diện:** CLI (`research-agent`) và Web UI (Streamlit)
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
-- **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất PDF tùy chọn: `fpdf2`)
-- **Kiểm thử:** `pytest` + `hypothesis` (169 test, gồm 10 property-based)
+- **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
+- **Kiểm thử:** `pytest` + `hypothesis` (170 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -277,6 +277,11 @@ cảnh **tin cậy**; sau phiên, kết quả được ghi nhớ.
 máy (để tiếng Việt hiển thị đúng); nếu thiếu `fpdf2` hoặc font thì ném
 `PdfExportError` để nơi gọi quay về xuất Markdown/HTML.
 
+### `docx_export.py` — Xuất Word (.docx)
+`render_docx_bytes` dùng lại `markdown_to_blocks` (thuần) rồi dựng tài liệu Word
+bằng `python-docx` (Word hỗ trợ Unicode sẵn nên tiếng Việt hiển thị đúng). Thiếu
+gói thì ném `DocxExportError` để quay về định dạng khác.
+
 ### `agent.py` — Bộ điều phối (Agent_Loop)
 - `decide_transition` (thuần) — quyết định tiếp tục hay tổng hợp (Property 8).
 - `build_messages` (thuần) — lắp ráp thông điệp, bọc nguồn trong `wrap_untrusted`.
@@ -474,8 +479,8 @@ File `ui/app.py` (Streamlit) + `ui/helpers.py`. Tái dùng 100% lõi, chỉ thê
 - **So sánh nhiều model song song**: chạy cùng câu hỏi qua 2–4 model và hiển thị
   báo cáo + chỉ số (`evaluate_report`) cạnh nhau.
 - Lịch sử lâu dài (lưu `.research_agent_history.json`).
-- Xuất Markdown / HTML / **PDF trực tiếp** (qua `pdf_export`, dự phòng về HTML
-  nếu thiếu gói/font).
+- Xuất Markdown / HTML / **PDF trực tiếp** (qua `pdf_export`) / **Word .docx**
+  (qua `docx_export`), đều dự phòng về định dạng khác nếu thiếu gói/font.
 - Hiển thị token usage + chi phí ước tính.
 
 Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
@@ -484,20 +489,20 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-169 test, chia làm:
+170 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
   trạng thái + bảo đảm dừng, giới hạn retry, render trace).
 - **Unit** (`test_units.py`, `test_calculator.py`, `test_usage.py`,
   `test_evaluate.py`, `test_stock.py`, `test_memory.py`, `test_pdf_export.py`,
-  `test_source_quality.py`, `test_report_style.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_source_quality.py`, `test_report_style.py`, `test_docx_export.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (169 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (170 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 

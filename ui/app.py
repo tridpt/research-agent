@@ -487,11 +487,11 @@ if history:
     if latest.get("usage"):
         st.caption(f"🧮 {latest['usage']}")
 
-    # --- Export: Markdown / HTML / PDF ---
-    c1, c2, c3 = st.columns(3)
+    # --- Export: Markdown / HTML / PDF / DOCX ---
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.download_button(
-            "⬇️ Tải Markdown (.md)",
+            "⬇️ Markdown (.md)",
             data=latest["markdown"],
             file_name="bao-cao.md",
             mime="text/markdown",
@@ -499,7 +499,7 @@ if history:
         )
     with c2:
         st.download_button(
-            "⬇️ Tải HTML (in ra PDF được)",
+            "⬇️ HTML",
             data=report_to_html(latest["question"], latest["markdown"]),
             file_name="bao-cao.html",
             mime="text/html",
@@ -512,7 +512,7 @@ if history:
 
             pdf_bytes = render_pdf_bytes(latest["question"], latest["markdown"])
             st.download_button(
-                "⬇️ Tải PDF (.pdf)",
+                "⬇️ PDF (.pdf)",
                 data=pdf_bytes,
                 file_name="bao-cao.pdf",
                 mime="application/pdf",
@@ -521,10 +521,30 @@ if history:
             )
         except Exception:  # noqa: BLE001 - fall back gracefully to HTML export
             st.button(
-                "⬇️ Tải PDF (.pdf)",
+                "⬇️ PDF (.pdf)",
                 disabled=True,
                 use_container_width=True,
                 help="Cần gói 'fpdf2' và một font Unicode. Hãy dùng nút HTML rồi in ra PDF.",
+            )
+    with c4:
+        try:
+            from research_agent.docx_export import render_docx_bytes
+
+            docx_bytes = render_docx_bytes(latest["question"], latest["markdown"])
+            st.download_button(
+                "⬇️ Word (.docx)",
+                data=docx_bytes,
+                file_name="bao-cao.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                help="Xuất file Word mở được trực tiếp.",
+            )
+        except Exception:  # noqa: BLE001 - fall back gracefully
+            st.button(
+                "⬇️ Word (.docx)",
+                disabled=True,
+                use_container_width=True,
+                help="Cần gói 'python-docx'. Cài: pip install python-docx",
             )
 
     # --- Source preview: click to expand the text the agent actually read ---

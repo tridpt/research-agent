@@ -135,10 +135,10 @@ python -m pip install -e ".[dev,ui]"
 ```
 
 For direct PDF export, also install the optional `pdf` extra (it pulls in
-`fpdf2`):
+`fpdf2`); for Word export, install the `docx` extra (`python-docx`):
 
 ```powershell
-python -m pip install -e ".[pdf]"
+python -m pip install -e ".[pdf,docx]"
 ```
 
 To permit one local PDF in a CLI run, opt in explicitly:
@@ -198,11 +198,13 @@ Use `--style` to tune report length/depth: `brief` (short summary + bullets),
 research-agent "What is the CAP theorem?" --style brief
 ```
 
-Give the output path a `.pdf` extension to export a PDF directly (needs the
-optional `pdf` extra; falls back to Markdown if no PDF font is available):
+Give the output path a `.pdf` or `.docx` extension to export that format
+directly (PDF needs the optional `pdf` extra, DOCX needs the `docx` extra; both
+fall back to Markdown if the dependency is unavailable):
 
 ```powershell
 research-agent "Compare gRPC and REST" -o report.pdf
+research-agent "Compare gRPC and REST" -o report.docx
 ```
 
 ### Web UI

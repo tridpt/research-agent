@@ -180,16 +180,18 @@ Ví dụ kết hợp:
 .\run.ps1 "Kubernetes là gì?" -o k8s.md -v --max-sources 3 --min-domains 2
 ```
 
-### Xuất PDF trực tiếp
-Đặt phần mở rộng file là `.pdf` thì agent xuất thẳng ra PDF (hỗ trợ tiếng Việt):
+### Xuất PDF / Word trực tiếp
+Đặt phần mở rộng file là `.pdf` hoặc `.docx` thì agent xuất thẳng định dạng đó
+(đều hỗ trợ tiếng Việt):
 ```powershell
 .\run.ps1 "Kubernetes là gì?" -o baocao.pdf -v
+.\run.ps1 "Kubernetes là gì?" -o baocao.docx -v
 ```
-Tính năng này cần gói tùy chọn `pdf`. Cài một lần:
+Cần gói tùy chọn tương ứng. Cài một lần:
 ```powershell
-python -m pip install -e ".[pdf]"
+python -m pip install -e ".[pdf,docx]"
 ```
-Nếu máy thiếu gói hoặc font Unicode, agent sẽ tự lưu thành `.md` thay thế.
+Nếu máy thiếu gói (hoặc font Unicode cho PDF), agent sẽ tự lưu thành `.md` thay thế.
 
 ### Bộ nhớ dài hạn
 Thêm `--memory` để agent **ghi nhớ** mỗi lần nghiên cứu và **gợi lại** những lần
@@ -309,9 +311,9 @@ Trình duyệt sẽ tự mở tại `http://localhost:8501`. Nếu không, mở 
 - **🌐 Ngôn ngữ báo cáo**: chọn tiếng Việt để báo cáo ra tiếng Việt dù nguồn là
   tiếng Anh.
 - **📏 Độ dài báo cáo**: chọn Ngắn gọn / Tiêu chuẩn / Chuyên sâu ở thanh bên.
-- **⬇️ Tải báo cáo**: dạng **Markdown**, **HTML**, hoặc **PDF trực tiếp** (nút
-  PDF hỗ trợ tiếng Việt; nếu máy thiếu gói/font, dùng nút HTML rồi
-  "In → Lưu thành PDF").
+- **⬇️ Tải báo cáo**: dạng **Markdown**, **HTML**, **PDF trực tiếp**, hoặc
+  **Word (.docx)** (PDF/Word hỗ trợ tiếng Việt; nếu máy thiếu gói/font, dùng nút
+  HTML rồi "In → Lưu thành PDF").
 - **📚 Xem trước nguồn**: bấm vào từng nguồn để xem đoạn nội dung agent đã đọc,
   hoặc mở trang gốc.
 - **⚖️ So sánh nhiều model**: chạy cùng một câu hỏi qua 2–4 model song song và

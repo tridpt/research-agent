@@ -235,23 +235,36 @@ def main(argv: Sequence[str]) -> int:
 
     markdown = render_markdown(report)
     out_path = settings.output_path or _default_output_path(question)
+    suffix = out_path.suffix.lower()
 
-    # Direct PDF export when the output path ends in .pdf; otherwise Markdown.
-    if out_path.suffix.lower() == ".pdf":
+    # Direct PDF/DOCX export by extension; otherwise Markdown.
+    if suffix == ".pdf":
         from .pdf_export import PdfExportError, write_pdf
 
         try:
             written = write_pdf(question, markdown, out_path)
         except PdfExportError as exc:
-            fallback = out_path.with_suffix(".md")
             print(f"PDF export unavailable ({exc}); writing Markdown instead.", file=sys.stderr)
-            try:
-                written = write_report(markdown, fallback)
-            except ReportWriteError as write_exc:
-                print(f"Failed to write report: {write_exc}", file=sys.stderr)
+            fallback = _write_markdown_fallback(markdown, out_path)
+            if fallback is None:
                 return 4
+            written = fallback
         except OSError as exc:
             print(f"Failed to write PDF: {exc}", file=sys.stderr)
+            return 4
+    elif suffix == ".docx":
+        from .docx_export import DocxExportError, write_docx
+
+        try:
+            written = write_docx(question, markdown, out_path)
+        except DocxExportError as exc:
+            print(f"DOCX export unavailable ({exc}); writing Markdown instead.", file=sys.stderr)
+            fallback = _write_markdown_fallback(markdown, out_path)
+            if fallback is None:
+                return 4
+            written = fallback
+        except OSError as exc:
+            print(f"Failed to write DOCX: {exc}", file=sys.stderr)
             return 4
     else:
         try:
@@ -264,6 +277,16 @@ def main(argv: Sequence[str]) -> int:
     print("\n--- Summary ---")
     print(_summary(report))
     return 0
+
+
+def _write_markdown_fallback(markdown: str, out_path: Path) -> Path | None:
+    """Write Markdown next to a failed PDF/DOCX export; None on failure."""
+    fallback = out_path.with_suffix(".md")
+    try:
+        return write_report(markdown, fallback)
+    except ReportWriteError as exc:
+        print(f"Failed to write report: {exc}", file=sys.stderr)
+        return None
 
 
 def _summary(report: Report, max_chars: int = 600) -> str:
