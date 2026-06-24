@@ -142,6 +142,16 @@ Hợp với câu hỏi rộng, nhiều khía cạnh.
 .\run.ps1 "Tình hình pin thể rắn năm 2026" --multi-agent -v
 ```
 
+### Công cụ agent tự dùng khi cần
+Ngoài tìm/đọc web, agent có thể tự gọi thêm các công cụ phù hợp với câu hỏi —
+bạn không cần bật gì:
+- **Thời tiết**: lấy thời tiết hiện tại của một địa điểm.
+- **Chứng khoán**: lấy giá mới nhất của một mã cổ phiếu/chỉ số (vd `AAPL`,
+  `^GSPC`, `BTC-USD`) — không cần API key.
+- **Máy tính**: tính toán số học chính xác cho con số trong báo cáo.
+- **Ngày giờ**: lấy ngày giờ hiện tại cho câu hỏi kiểu "mới nhất", "hôm nay".
+- **Đọc PDF**: chỉ đọc đúng file PDF bạn chỉ định bằng `--pdf duongdan.pdf`.
+
 ---
 
 ## 7. Các tùy chọn (flags)
@@ -158,6 +168,8 @@ Hợp với câu hỏi rộng, nhiều khía cạnh.
 | `--reflect` | Bật chế độ tự đánh giá |
 | `--reflect-iterations` | Số vòng đánh giá lại tối đa |
 | `--multi-agent` | Bật chế độ đội đa agent |
+| `--memory` | Nhớ kết quả nghiên cứu cũ và gợi lại khi gặp câu hỏi liên quan |
+| `--memory-file` | Đường dẫn file lưu bộ nhớ (mặc định `.research_agent_memory.json`) |
 | `--no-cache` | Tắt bộ nhớ đệm (không dùng lại trang đã tải) |
 | `--cache-dir` | Thư mục lưu bộ nhớ đệm |
 | `--model` | Đổi mô hình cho lần chạy này |
@@ -165,6 +177,25 @@ Hợp với câu hỏi rộng, nhiều khía cạnh.
 Ví dụ kết hợp:
 ```powershell
 .\run.ps1 "Kubernetes là gì?" -o k8s.md -v --max-sources 3 --min-domains 2
+```
+
+### Xuất PDF trực tiếp
+Đặt phần mở rộng file là `.pdf` thì agent xuất thẳng ra PDF (hỗ trợ tiếng Việt):
+```powershell
+.\run.ps1 "Kubernetes là gì?" -o baocao.pdf -v
+```
+Tính năng này cần gói tùy chọn `pdf`. Cài một lần:
+```powershell
+python -m pip install -e ".[pdf]"
+```
+Nếu máy thiếu gói hoặc font Unicode, agent sẽ tự lưu thành `.md` thay thế.
+
+### Bộ nhớ dài hạn
+Thêm `--memory` để agent **ghi nhớ** mỗi lần nghiên cứu và **gợi lại** những lần
+liên quan ở các phiên sau, dùng làm ngữ cảnh nền (vẫn tự tìm nguồn mới):
+```powershell
+.\run.ps1 "RAG là gì?" --memory -v
+.\run.ps1 "So sánh RAG và fine-tuning" --memory -v   # tận dụng lại lần trước
 ```
 
 ---
@@ -268,10 +299,14 @@ Trình duyệt sẽ tự mở tại `http://localhost:8501`. Nếu không, mở 
 ### Các tính năng của giao diện
 - **🌐 Ngôn ngữ báo cáo**: chọn tiếng Việt để báo cáo ra tiếng Việt dù nguồn là
   tiếng Anh.
-- **⬇️ Tải báo cáo**: dạng **Markdown** hoặc **HTML** (mở file HTML rồi
-  "In → Lưu thành PDF" của trình duyệt để có PDF).
+- **⬇️ Tải báo cáo**: dạng **Markdown**, **HTML**, hoặc **PDF trực tiếp** (nút
+  PDF hỗ trợ tiếng Việt; nếu máy thiếu gói/font, dùng nút HTML rồi
+  "In → Lưu thành PDF").
 - **📚 Xem trước nguồn**: bấm vào từng nguồn để xem đoạn nội dung agent đã đọc,
   hoặc mở trang gốc.
+- **⚖️ So sánh nhiều model**: chạy cùng một câu hỏi qua 2–4 model song song và
+  xem báo cáo cùng các chỉ số (số nguồn, tên miền, trích dẫn, điểm chất lượng)
+  cạnh nhau — tiện để chọn model phù hợp.
 - **💬 Hỏi tiếp**: đặt câu hỏi nối tiếp ngay dưới báo cáo; agent trả lời dựa trên
   báo cáo và nguồn, giữ ngữ cảnh hội thoại.
 - **🕘 Lịch sử**: mọi báo cáo được **lưu vào file**, vẫn còn sau khi tắt/mở lại

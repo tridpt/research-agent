@@ -36,8 +36,8 @@ Markdown **có trích dẫn**.
 - **Giao diện:** CLI (`research-agent`) và Web UI (Streamlit)
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
-- **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs`
-- **Kiểm thử:** `pytest` + `hypothesis` (107 test, gồm 10 property-based)
+- **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất PDF tùy chọn: `fpdf2`)
+- **Kiểm thử:** `pytest` + `hypothesis` (164 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -243,13 +243,39 @@ Windows. Mã thoát: 0 (OK), 2 (config), 3 (LLM), 4 (ghi file).
 không (đủ tham số bắt buộc), trả `AgentDecision` hoặc `InvalidDecision`.
 
 ### `tools.py` — Schema công cụ
-`TOOL_SCHEMAS` — đặc tả 5 công cụ (search/read/finish/calculate/now) ở định dạng
-function-calling chuẩn OpenAI/Gemini.
+`TOOL_SCHEMAS` — đặc tả các công cụ (search/read/finish/calculate/now/
+get_weather/get_stock/read_pdf) ở định dạng function-calling chuẩn OpenAI/Gemini.
 
 ### `calculator.py` — Công cụ tính toán an toàn
 `calculate(expression)` — đánh giá biểu thức số học bằng AST với **allow-list**
 toán tử, **không dùng `eval`**, chặn tên biến/gọi hàm/số mũ quá lớn. `now_str` —
 ngày giờ hiện tại.
+
+### `stock.py` — Công cụ chứng khoán
+Lấy giá mới nhất từ endpoint công khai của Yahoo Finance (không cần API key, như
+cách công cụ thời tiết dùng wttr.in). `normalize_symbol`, `parse_yahoo_chart`,
+`format_stock_quote` là **hàm thuần** (test không cần mạng); chỉ
+`fetch_stock_quote` thực hiện lời gọi HTTP.
+
+### `source_quality.py` — Xếp hạng độ tin cậy nguồn
+Heuristic minh bạch (không phải fact-check): `assess_source` chấm điểm theo loại
+domain — ưu tiên official `.gov`/`.edu`/`.int`, rồi tập nguồn uy tín đã tuyển
+chọn (hãng tin lớn, bách khoa, nhà xuất bản học thuật), trên web thường, dưới
+mạng xã hội — cộng với lượng bằng chứng trích xuất được. `rank_search_results`
+sắp xếp kết quả theo điểm.
+
+### `memory.py` — Bộ nhớ dài hạn (`--memory`)
+Lưu nghiên cứu cũ (câu hỏi + tóm tắt + URL nguồn) ra file JSON. `tokenize`,
+`relevance_score`, `select_relevant`, `summarize_for_memory`,
+`format_memory_directive` là **hàm thuần**; chỉ `MemoryStore` chạm đĩa (giống
+`FetchCache`). Trước mỗi phiên, các bản ghi liên quan nhất được gợi lại làm ngữ
+cảnh **tin cậy**; sau phiên, kết quả được ghi nhớ.
+
+### `pdf_export.py` — Xuất PDF trực tiếp
+`markdown_to_blocks` / `strip_inline_markdown` phân tích Markdown thành block
+(thuần). `render_pdf_bytes` dựng PDF bằng `fpdf2` với font Unicode tự tìm trên
+máy (để tiếng Việt hiển thị đúng); nếu thiếu `fpdf2` hoặc font thì ném
+`PdfExportError` để nơi gọi quay về xuất Markdown/HTML.
 
 ### `agent.py` — Bộ điều phối (Agent_Loop)
 - `decide_transition` (thuần) — quyết định tiếp tục hay tổng hợp (Property 8).
@@ -296,8 +322,11 @@ mọi URL nguồn (Property 6).
 hiển thị.
 
 ### `evaluate.py` — Đánh giá
-`evaluate_report` đo chỉ số khách quan (số nguồn, domain, trích dẫn, grounded),
-`aggregate` tính trung bình để so sánh các chế độ.
+`evaluate_report` đo chỉ số khách quan (số nguồn, domain, trích dẫn, grounded,
+điểm chất lượng nguồn trung bình), `aggregate` tính trung bình một chế độ.
+`evaluate_modes` chạy nhiều chế độ trên cùng bộ câu hỏi, `compare_modes` +
+`format_comparison_markdown` dựng bảng so sánh. Có console script
+`research-agent-eval` để benchmark nhanh.
 
 ### `errors.py` — Ngoại lệ
 `ResearchAgentError` (gốc), `ConfigError`, `ReportWriteError`, `LLMError`.
@@ -328,7 +357,7 @@ classDiagram
 | `ResearchBudget` | max_rounds (8), max_sources (12), max_seconds (180) |
 | `SearchResult` | title, url, snippet |
 | `Source` | url, content, fetched_at |
-| `AgentDecision` | action, reasoning, query, url, expression |
+| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol |
 | `Citation` | claim_ref, url |
 | `Report` | question, body_markdown, citations, sources, no_information |
 | `SessionState` | question, rounds_used, sources, search_results, search_history, failed_urls, tool_notes, ... |
@@ -350,7 +379,7 @@ tool, độ trễ) áp dụng đồng nhất.
 
 ## 8. Hệ thống công cụ (tools)
 
-Agent chọn 1 trong 5 công cụ mỗi bước qua **native function-calling**:
+Agent chọn 1 trong các công cụ mỗi bước qua **native function-calling**:
 
 | Tool | Tham số | Tác dụng |
 |---|---|---|
@@ -358,6 +387,9 @@ Agent chọn 1 trong 5 công cụ mỗi bước qua **native function-calling**:
 | `read` | url | Tải & đọc một trang |
 | `calculate` | expression | Tính toán số học chính xác (an toàn, không eval) |
 | `now` | — | Lấy ngày giờ hiện tại |
+| `get_weather` | location | Lấy thời tiết hiện tại (wttr.in) |
+| `get_stock` | symbol | Lấy giá cổ phiếu/chỉ số mới nhất (Yahoo Finance, không cần key) |
+| `read_pdf` | path | Đọc đúng PDF người dùng đã chỉ định cho phiên |
 | `finish` | — | Dừng và tổng hợp |
 
 **Điểm học quan trọng:** hệ thống không hard-code "khi nào dùng tool nào". LLM tự
@@ -437,8 +469,11 @@ File `ui/app.py` (Streamlit) + `ui/helpers.py`. Tái dùng 100% lõi, chỉ thê
 - Hiển thị các bước agent **bằng tiếng Việt** theo thời gian thực.
 - **Streaming** báo cáo (chế độ Thường) — chữ chạy dần.
 - Xem trước nội dung từng nguồn; chat hỏi tiếp dựa trên báo cáo.
+- **So sánh nhiều model song song**: chạy cùng câu hỏi qua 2–4 model và hiển thị
+  báo cáo + chỉ số (`evaluate_report`) cạnh nhau.
 - Lịch sử lâu dài (lưu `.research_agent_history.json`).
-- Xuất Markdown / HTML (in ra PDF được).
+- Xuất Markdown / HTML / **PDF trực tiếp** (qua `pdf_export`, dự phòng về HTML
+  nếu thiếu gói/font).
 - Hiển thị token usage + chi phí ước tính.
 
 Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
@@ -447,19 +482,20 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-107 test, chia làm:
+164 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
   trạng thái + bảo đảm dừng, giới hạn retry, render trace).
 - **Unit** (`test_units.py`, `test_calculator.py`, `test_usage.py`,
-  `test_evaluate.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_evaluate.py`, `test_stock.py`, `test_memory.py`, `test_pdf_export.py`,
+  `test_source_quality.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` · Lint: `ruff check src tests` · Type: `mypy src`.
+Chạy: `pytest` (164 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 
