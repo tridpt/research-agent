@@ -205,4 +205,100 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "arxiv_search",
+            "description": (
+                "Search arXiv for academic papers and read their abstracts. Use "
+                "for scientific, technical, or research-paper questions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The topic or keywords to search arXiv for.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this paper search is needed.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "convert",
+            "description": (
+                "Convert between units or currencies, e.g. '100 USD to EUR', "
+                "'10 km to miles', '32 F to C'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Conversion like 'AMOUNT FROM to TO'.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this conversion is needed.",
+                    },
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_news",
+            "description": (
+                "Find recent news/stories about a topic (via Hacker News). Use "
+                "for current events and trending tech discussions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The topic to find recent stories about.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why recent news is needed.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_github",
+            "description": (
+                "Look up a GitHub repository's metadata (stars, language, "
+                "license, latest release). Use for software/library questions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {
+                        "type": "string",
+                        "description": "Repository as 'owner/name' or a GitHub URL.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this repository lookup is needed.",
+                    },
+                },
+                "required": ["repo"],
+            },
+        },
+    },
 ]

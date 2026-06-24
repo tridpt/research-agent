@@ -15,10 +15,13 @@ from urllib.parse import quote
 import httpx
 from pypdf import PdfReader
 
+from .arxiv import ArxivError, fetch_arxiv
 from .calculator import CalculatorError, calculate_str, now_str
 from .content import host_of, wrap_untrusted
+from .convert import ConvertError, convert
 from .decision import parse_decision
 from .fetch_tool import FetchTool
+from .github import GitHubError, fetch_github
 from .llm import LLMProvider, Message
 from .local_documents import approved_pdf_path
 from .models import (
@@ -34,6 +37,7 @@ from .models import (
     Transition,
     TransitionKind,
 )
+from .news import NewsError, fetch_news
 from .search_tool import SearchTool
 from .source_quality import assess_source
 from .stock import StockError, fetch_stock_quote
@@ -46,7 +50,9 @@ SYSTEM_PROMPT = (
     "READ a source, or FINISH and synthesize. You can also use GET_WEATHER "
     "to get real-time weather and GET_STOCK to get the latest stock/index "
     "quote for a ticker symbol. GET_WIKIPEDIA fetches an encyclopedic summary "
-    "of a topic for definitions and background. READ_PDF is available only for "
+    "of a topic for definitions and background. ARXIV_SEARCH finds academic "
+    "papers, CONVERT converts units/currencies, GET_NEWS finds recent stories, "
+    "and GET_GITHUB looks up a repository. READ_PDF is available only for "
     "a PDF the user explicitly selected. "
     "Use exactly one of the provided function tools for each decision. Do not "
     "reply with JSON text and never call a tool named JSON. "
@@ -415,6 +421,43 @@ def run_session(
                     )
             except WikipediaError as exc:
                 emit(_error_event(state, f"get_wikipedia error: {exc}"))
+        elif decision.action is ActionType.ARXIV_SEARCH:
+            emit(_action_event(state, decision))
+            try:
+                arxiv_url, content = fetch_arxiv(decision.paper_query or "")
+                if not any(source.url == arxiv_url for source in state.sources):
+                    state.sources.append(
+                        Source(url=arxiv_url, content=content, fetched_at=clock())
+                    )
+            except ArxivError as exc:
+                emit(_error_event(state, f"arxiv_search error: {exc}"))
+        elif decision.action is ActionType.CONVERT:
+            emit(_action_event(state, decision))
+            try:
+                result = convert(decision.conversion or "")
+                state.tool_notes.append(f"convert({decision.conversion}) = {result}")
+            except ConvertError as exc:
+                emit(_error_event(state, f"convert error: {exc}"))
+        elif decision.action is ActionType.GET_NEWS:
+            emit(_action_event(state, decision))
+            try:
+                news_url, content = fetch_news(decision.news_query or "")
+                if not any(source.url == news_url for source in state.sources):
+                    state.sources.append(
+                        Source(url=news_url, content=content, fetched_at=clock())
+                    )
+            except NewsError as exc:
+                emit(_error_event(state, f"get_news error: {exc}"))
+        elif decision.action is ActionType.GET_GITHUB:
+            emit(_action_event(state, decision))
+            try:
+                gh_url, content = fetch_github(decision.repo or "")
+                if not any(source.url == gh_url for source in state.sources):
+                    state.sources.append(
+                        Source(url=gh_url, content=content, fetched_at=clock())
+                    )
+            except GitHubError as exc:
+                emit(_error_event(state, f"get_github error: {exc}"))
 
         state.rounds_used += 1
         emit(_round_event(state))
@@ -528,6 +571,14 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["symbol"] = decision.symbol
     if decision.topic:
         detail["topic"] = decision.topic
+    if decision.paper_query:
+        detail["paper_query"] = decision.paper_query
+    if decision.conversion:
+        detail["conversion"] = decision.conversion
+    if decision.news_query:
+        detail["news_query"] = decision.news_query
+    if decision.repo:
+        detail["repo"] = decision.repo
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,

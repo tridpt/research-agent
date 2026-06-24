@@ -85,6 +85,14 @@ def render_step_vi(event) -> str:
             return f"📈 Đang lấy dữ liệu chứng khoán: {detail.get('symbol', '')}"
         if action == "get_wikipedia":
             return f"📚 Đang tra Wikipedia: {detail.get('topic', '')}"
+        if action == "arxiv_search":
+            return f"🎓 Đang tìm bài báo arXiv: {detail.get('paper_query', '')}"
+        if action == "convert":
+            return f"🔁 Đang chuyển đổi: {detail.get('conversion', '')}"
+        if action == "get_news":
+            return f"📰 Đang tìm tin gần đây: {detail.get('news_query', '')}"
+        if action == "get_github":
+            return f"🐙 Đang tra GitHub: {detail.get('repo', '')}"
         if action == "now":
             return "🗓️ Đang lấy ngày giờ hiện tại"
         if action == "plan":

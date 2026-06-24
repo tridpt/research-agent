@@ -149,6 +149,10 @@ bạn không cần bật gì:
 - **Chứng khoán**: lấy giá mới nhất của một mã cổ phiếu/chỉ số (vd `AAPL`,
   `^GSPC`, `BTC-USD`) — không cần API key.
 - **Wikipedia**: tra cứu tóm tắt bách khoa của một chủ đề (định nghĩa, bối cảnh).
+- **arXiv**: tìm và đọc tóm tắt các bài báo học thuật (không cần key).
+- **Chuyển đổi**: đổi đơn vị hoặc tiền tệ (vd `10 km to miles`, `100 USD to EUR`).
+- **Tin tức**: tìm tin/bài gần đây về một chủ đề (qua Hacker News).
+- **GitHub**: tra thông tin repo (sao, ngôn ngữ, giấy phép, bản phát hành mới nhất).
 - **Máy tính**: tính toán số học chính xác cho con số trong báo cáo.
 - **Ngày giờ**: lấy ngày giờ hiện tại cho câu hỏi kiểu "mới nhất", "hôm nay".
 - **Đọc PDF**: chỉ đọc đúng file PDF bạn chỉ định bằng `--pdf duongdan.pdf`.

@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (181 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (215 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -263,6 +263,25 @@ Lấy đoạn tóm tắt (lead extract) của bài Wikipedia khớp nhất qua M
 `parse_wikipedia_response`, `format_article` là **hàm thuần**; chỉ
 `fetch_wikipedia` gọi HTTP.
 
+### `arxiv.py` — Công cụ arXiv
+Tìm bài báo học thuật qua Atom API của arXiv (không cần key). `normalize_query`,
+`parse_arxiv_atom`, `format_papers` là **hàm thuần** (test bằng fixture XML); chỉ
+`fetch_arxiv` gọi HTTP.
+
+### `convert.py` — Chuyển đổi đơn vị & tiền tệ
+Bổ trợ cho calculator. Đổi đơn vị vật lý (xác định, thuần) và tiền tệ (tỷ giá ECB
+trực tiếp qua Frankfurter, không cần key). `parse_conversion`, `convert_units`,
+`is_currency` là **hàm thuần**; chỉ `fetch_currency` gọi mạng.
+
+### `news.py` — Tin tức gần đây
+Tìm tin/bài qua Hacker News (Algolia API, không cần key). `parse_hn_results`,
+`format_news` là **hàm thuần**; chỉ `fetch_news` gọi HTTP.
+
+### `github.py` — Tra cứu kho GitHub
+Lấy metadata repo công khai (sao, ngôn ngữ, giấy phép, bản phát hành mới) qua
+GitHub REST API. `normalize_repo`, `parse_repo`, `parse_release`, `format_repo`
+là **hàm thuần**; chỉ `fetch_github` gọi HTTP.
+
 ### `source_quality.py` — Xếp hạng độ tin cậy nguồn
 Heuristic minh bạch (không phải fact-check): `assess_source` chấm điểm theo loại
 domain — ưu tiên official `.gov`/`.edu`/`.int`, rồi tập nguồn uy tín đã tuyển
@@ -369,7 +388,7 @@ classDiagram
 | `ResearchBudget` | max_rounds (8), max_sources (12), max_seconds (180) |
 | `SearchResult` | title, url, snippet |
 | `Source` | url, content, fetched_at |
-| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol, topic |
+| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol, topic, paper_query, conversion, news_query, repo |
 | `Citation` | claim_ref, url |
 | `Report` | question, body_markdown, citations, sources, no_information |
 | `SessionState` | question, rounds_used, sources, search_results, search_history, failed_urls, tool_notes, ... |
@@ -402,6 +421,10 @@ Agent chọn 1 trong các công cụ mỗi bước qua **native function-calling
 | `get_weather` | location | Lấy thời tiết hiện tại (wttr.in) |
 | `get_stock` | symbol | Lấy giá cổ phiếu/chỉ số mới nhất (Yahoo Finance, không cần key) |
 | `get_wikipedia` | topic | Tra tóm tắt bách khoa của một chủ đề (MediaWiki API, không cần key) |
+| `arxiv_search` | query | Tìm bài báo học thuật trên arXiv (Atom API, không cần key) |
+| `convert` | expression | Đổi đơn vị/tiền tệ (vd '100 USD to EUR') |
+| `get_news` | query | Tìm tin gần đây (Hacker News, không cần key) |
+| `get_github` | repo | Tra metadata kho GitHub (REST API) |
 | `read_pdf` | path | Đọc đúng PDF người dùng đã chỉ định cho phiên |
 | `finish` | — | Dừng và tổng hợp |
 
@@ -496,7 +519,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-181 test, chia làm:
+215 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
@@ -504,13 +527,14 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 - **Unit** (`test_units.py`, `test_calculator.py`, `test_usage.py`,
   `test_evaluate.py`, `test_stock.py`, `test_memory.py`, `test_pdf_export.py`,
   `test_source_quality.py`, `test_report_style.py`, `test_docx_export.py`,
-  `test_wikipedia.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_wikipedia.py`, `test_arxiv.py`, `test_convert.py`, `test_news.py`,
+  `test_github.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (181 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (215 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 

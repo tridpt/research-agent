@@ -76,5 +76,29 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
             return InvalidDecision(reason="GET_WIKIPEDIA requires a non-empty 'topic'")
         return AgentDecision(action=action, topic=topic.strip(), reasoning=reasoning)
 
+    if action is ActionType.ARXIV_SEARCH:
+        query = raw.get("query")
+        if not isinstance(query, str) or not query.strip():
+            return InvalidDecision(reason="ARXIV_SEARCH requires a non-empty 'query'")
+        return AgentDecision(action=action, paper_query=query.strip(), reasoning=reasoning)
+
+    if action is ActionType.CONVERT:
+        expr = raw.get("expression")
+        if not isinstance(expr, str) or not expr.strip():
+            return InvalidDecision(reason="CONVERT requires a non-empty 'expression'")
+        return AgentDecision(action=action, conversion=expr.strip(), reasoning=reasoning)
+
+    if action is ActionType.GET_NEWS:
+        query = raw.get("query")
+        if not isinstance(query, str) or not query.strip():
+            return InvalidDecision(reason="GET_NEWS requires a non-empty 'query'")
+        return AgentDecision(action=action, news_query=query.strip(), reasoning=reasoning)
+
+    if action is ActionType.GET_GITHUB:
+        repo = raw.get("repo")
+        if not isinstance(repo, str) or not repo.strip():
+            return InvalidDecision(reason="GET_GITHUB requires a non-empty 'repo'")
+        return AgentDecision(action=action, repo=repo.strip(), reasoning=reasoning)
+
     # FINISH needs no extra parameters.
     return AgentDecision(action=ActionType.FINISH, reasoning=reasoning)

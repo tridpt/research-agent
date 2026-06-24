@@ -99,6 +99,12 @@ The agent chooses among these tools on each step via native function-calling:
   volume) from Yahoo Finance's public endpoint (no API key).
 - **get_wikipedia** — fetch an encyclopedic summary of a topic from Wikipedia
   (no API key) for definitions and background.
+- **arxiv_search** — search arXiv and read academic-paper abstracts (no key).
+- **convert** — convert units or currencies (e.g. `10 km to miles`,
+  `100 USD to EUR`); currencies use live ECB rates (no key).
+- **get_news** — find recent stories about a topic via Hacker News (no key).
+- **get_github** — look up a GitHub repository's metadata (stars, language,
+  license, latest release).
 - **read_pdf** — read a PDF explicitly selected by the user for the current run.
 - **finish** — stop and synthesize the cited report.
 
@@ -310,6 +316,10 @@ src/research_agent/
 ├── calculator.py     # safe AST arithmetic for the calculate tool
 ├── stock.py          # stock-quote tool (Yahoo Finance, no key)
 ├── wikipedia.py      # Wikipedia summary tool (MediaWiki API, no key)
+├── arxiv.py          # arXiv paper-search tool (Atom API, no key)
+├── convert.py        # unit + currency conversion tool (Frankfurter, no key)
+├── news.py           # recent-news tool (Hacker News Algolia API, no key)
+├── github.py         # GitHub repository lookup tool (REST API)
 ├── source_quality.py # explainable source-credibility ranking
 ├── evaluate.py       # deterministic metrics + cross-mode benchmark
 ├── tools.py          # native function-calling tool schemas

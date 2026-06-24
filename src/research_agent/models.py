@@ -25,6 +25,10 @@ class ActionType(Enum):
     GET_WEATHER = "get_weather"
     GET_STOCK = "get_stock"
     GET_WIKIPEDIA = "get_wikipedia"
+    ARXIV_SEARCH = "arxiv_search"
+    CONVERT = "convert"
+    GET_NEWS = "get_news"
+    GET_GITHUB = "get_github"
 
 
 class TransitionKind(Enum):
@@ -109,6 +113,10 @@ class AgentDecision:
     location: str | None = None
     symbol: str | None = None
     topic: str | None = None
+    paper_query: str | None = None
+    conversion: str | None = None
+    news_query: str | None = None
+    repo: str | None = None
 
 
 @dataclass(frozen=True)
