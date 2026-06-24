@@ -148,6 +148,7 @@ bạn không cần bật gì:
 - **Thời tiết**: lấy thời tiết hiện tại của một địa điểm.
 - **Chứng khoán**: lấy giá mới nhất của một mã cổ phiếu/chỉ số (vd `AAPL`,
   `^GSPC`, `BTC-USD`) — không cần API key.
+- **Wikipedia**: tra cứu tóm tắt bách khoa của một chủ đề (định nghĩa, bối cảnh).
 - **Máy tính**: tính toán số học chính xác cho con số trong báo cáo.
 - **Ngày giờ**: lấy ngày giờ hiện tại cho câu hỏi kiểu "mới nhất", "hôm nay".
 - **Đọc PDF**: chỉ đọc đúng file PDF bạn chỉ định bằng `--pdf duongdan.pdf`.

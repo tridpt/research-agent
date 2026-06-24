@@ -70,5 +70,11 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
             return InvalidDecision(reason="GET_STOCK requires a non-empty 'symbol'")
         return AgentDecision(action=action, symbol=symbol.strip(), reasoning=reasoning)
 
+    if action is ActionType.GET_WIKIPEDIA:
+        topic = raw.get("topic")
+        if not isinstance(topic, str) or not topic.strip():
+            return InvalidDecision(reason="GET_WIKIPEDIA requires a non-empty 'topic'")
+        return AgentDecision(action=action, topic=topic.strip(), reasoning=reasoning)
+
     # FINISH needs no extra parameters.
     return AgentDecision(action=ActionType.FINISH, reasoning=reasoning)

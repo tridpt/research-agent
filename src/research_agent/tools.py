@@ -181,4 +181,28 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_wikipedia",
+            "description": (
+                "Look up an encyclopedic summary of a topic from Wikipedia. Good "
+                "for definitions, background, and well-established facts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The topic or article title to look up.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this Wikipedia lookup is needed.",
+                    },
+                },
+                "required": ["topic"],
+            },
+        },
+    },
 ]

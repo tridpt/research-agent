@@ -83,6 +83,8 @@ def render_step_vi(event) -> str:
             return f"🌦️ Đang lấy thời tiết: {detail.get('location', '')}"
         if action == "get_stock":
             return f"📈 Đang lấy dữ liệu chứng khoán: {detail.get('symbol', '')}"
+        if action == "get_wikipedia":
+            return f"📚 Đang tra Wikipedia: {detail.get('topic', '')}"
         if action == "now":
             return "🗓️ Đang lấy ngày giờ hiện tại"
         if action == "plan":

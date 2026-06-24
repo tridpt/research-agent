@@ -97,6 +97,8 @@ The agent chooses among these tools on each step via native function-calling:
 - **get_weather** — retrieve current weather from wttr.in.
 - **get_stock** — retrieve the latest stock/index quote (price, day range,
   volume) from Yahoo Finance's public endpoint (no API key).
+- **get_wikipedia** — fetch an encyclopedic summary of a topic from Wikipedia
+  (no API key) for definitions and background.
 - **read_pdf** — read a PDF explicitly selected by the user for the current run.
 - **finish** — stop and synthesize the cited report.
 
@@ -301,11 +303,13 @@ src/research_agent/
 ├── citations.py      # validate_citations (pure)
 ├── render.py         # render_markdown (pure)
 ├── pdf_export.py     # markdown -> PDF (pure parsing + fpdf2 rendering)
+├── docx_export.py    # markdown -> Word .docx (python-docx)
 ├── synthesizer.py    # synthesize report
 ├── reflection.py     # self-critique loop (--reflect)
 ├── multi_agent.py    # planner/researcher/writer team (--multi-agent)
 ├── calculator.py     # safe AST arithmetic for the calculate tool
 ├── stock.py          # stock-quote tool (Yahoo Finance, no key)
+├── wikipedia.py      # Wikipedia summary tool (MediaWiki API, no key)
 ├── source_quality.py # explainable source-credibility ranking
 ├── evaluate.py       # deterministic metrics + cross-mode benchmark
 ├── tools.py          # native function-calling tool schemas

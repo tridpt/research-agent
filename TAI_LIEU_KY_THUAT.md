@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (170 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (181 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -257,6 +257,12 @@ cách công cụ thời tiết dùng wttr.in). `normalize_symbol`, `parse_yahoo_
 `format_stock_quote` là **hàm thuần** (test không cần mạng); chỉ
 `fetch_stock_quote` thực hiện lời gọi HTTP.
 
+### `wikipedia.py` — Công cụ Wikipedia
+Lấy đoạn tóm tắt (lead extract) của bài Wikipedia khớp nhất qua MediaWiki API
+(không cần key). `normalize_topic`, `wikipedia_query_params`,
+`parse_wikipedia_response`, `format_article` là **hàm thuần**; chỉ
+`fetch_wikipedia` gọi HTTP.
+
 ### `source_quality.py` — Xếp hạng độ tin cậy nguồn
 Heuristic minh bạch (không phải fact-check): `assess_source` chấm điểm theo loại
 domain — ưu tiên official `.gov`/`.edu`/`.int`, rồi tập nguồn uy tín đã tuyển
@@ -363,7 +369,7 @@ classDiagram
 | `ResearchBudget` | max_rounds (8), max_sources (12), max_seconds (180) |
 | `SearchResult` | title, url, snippet |
 | `Source` | url, content, fetched_at |
-| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol |
+| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol, topic |
 | `Citation` | claim_ref, url |
 | `Report` | question, body_markdown, citations, sources, no_information |
 | `SessionState` | question, rounds_used, sources, search_results, search_history, failed_urls, tool_notes, ... |
@@ -395,6 +401,7 @@ Agent chọn 1 trong các công cụ mỗi bước qua **native function-calling
 | `now` | — | Lấy ngày giờ hiện tại |
 | `get_weather` | location | Lấy thời tiết hiện tại (wttr.in) |
 | `get_stock` | symbol | Lấy giá cổ phiếu/chỉ số mới nhất (Yahoo Finance, không cần key) |
+| `get_wikipedia` | topic | Tra tóm tắt bách khoa của một chủ đề (MediaWiki API, không cần key) |
 | `read_pdf` | path | Đọc đúng PDF người dùng đã chỉ định cho phiên |
 | `finish` | — | Dừng và tổng hợp |
 
@@ -489,20 +496,21 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-170 test, chia làm:
+181 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
   trạng thái + bảo đảm dừng, giới hạn retry, render trace).
 - **Unit** (`test_units.py`, `test_calculator.py`, `test_usage.py`,
   `test_evaluate.py`, `test_stock.py`, `test_memory.py`, `test_pdf_export.py`,
-  `test_source_quality.py`, `test_report_style.py`, `test_docx_export.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_source_quality.py`, `test_report_style.py`, `test_docx_export.py`,
+  `test_wikipedia.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (170 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (181 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 

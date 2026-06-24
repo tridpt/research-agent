@@ -38,14 +38,16 @@ from .search_tool import SearchTool
 from .source_quality import assess_source
 from .stock import StockError, fetch_stock_quote
 from .tools import TOOL_SCHEMAS
+from .wikipedia import WikipediaError, fetch_wikipedia
 
 SYSTEM_PROMPT = (
     "You are an autonomous research agent. Your goal is to answer the user's "
     "research question by deciding, step by step, whether to SEARCH the web, "
     "READ a source, or FINISH and synthesize. You can also use GET_WEATHER "
     "to get real-time weather and GET_STOCK to get the latest stock/index "
-    "quote for a ticker symbol. READ_PDF is available only for a PDF the user "
-    "explicitly selected. "
+    "quote for a ticker symbol. GET_WIKIPEDIA fetches an encyclopedic summary "
+    "of a topic for definitions and background. READ_PDF is available only for "
+    "a PDF the user explicitly selected. "
     "Use exactly one of the provided function tools for each decision. Do not "
     "reply with JSON text and never call a tool named JSON. "
     "Prefer to READ at least two or three DIFFERENT sources (distinct domains) "
@@ -400,6 +402,19 @@ def run_session(
                     )
             except StockError as exc:
                 emit(_error_event(state, f"get_stock error: {exc}"))
+        elif decision.action is ActionType.GET_WIKIPEDIA:
+            emit(_action_event(state, decision))
+            try:
+                wiki_url, content = fetch_wikipedia(
+                    decision.topic or "",
+                    max_chars=settings.per_source_char_limit,
+                )
+                if not any(source.url == wiki_url for source in state.sources):
+                    state.sources.append(
+                        Source(url=wiki_url, content=content, fetched_at=clock())
+                    )
+            except WikipediaError as exc:
+                emit(_error_event(state, f"get_wikipedia error: {exc}"))
 
         state.rounds_used += 1
         emit(_round_event(state))
@@ -511,6 +526,8 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["location"] = decision.location
     if decision.symbol:
         detail["symbol"] = decision.symbol
+    if decision.topic:
+        detail["topic"] = decision.topic
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,
