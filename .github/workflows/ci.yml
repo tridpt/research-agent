@@ -28,6 +28,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install a Unicode font (so PDF export tests run, not skip)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
         with:
