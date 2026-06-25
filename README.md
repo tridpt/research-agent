@@ -207,7 +207,11 @@ Flags: `-o/--out`, `-v/--verbose`, `--max-rounds`, `--max-sources`,
 `--max-seconds`, `--min-domains`, `--max-per-domain`, `--cache-dir`,
 `--no-cache`, `--reflect`, `--reflect-iterations`, `--multi-agent`,
 `--memory`, `--memory-file`, `--style`, `--prefetch`, `--cache-llm`,
-`--reputation-file`, `--model`, `--provider`.
+`--reputation-file`, `--chat`, `--lang`, `--model`, `--provider`.
+
+After a report, add `--chat` to ask follow-up questions in the terminal
+(answers are grounded only in the report). With `-v`, each round also prints a
+budget progress line (rounds/sources used vs. the limits).
 
 Use `--style` to tune report length/depth: `brief` (short summary + bullets),
 `standard` (default), or `deep` (in-depth, sectioned analysis):
@@ -235,7 +239,9 @@ streamlit run ui/app.py          # or: .\run-ui.ps1
 
 Then open http://localhost:8501. Pick a provider, paste your API key, choose a
 mode (normal / reflect / multi-agent), enter a question, and watch the agent's
-steps live before the cited report appears.
+steps live before the cited report appears. The UI is bilingual
+(Vietnamese/English — switch at the top of the sidebar) and exposes advanced
+toggles for parallel prefetch, the LLM response cache, and recency steering.
 
 > **Live demo:** there is no static demo link because this is a Python app
 > (not a static site), so it can't run on GitHub Pages. To share it online, deploy
@@ -311,6 +317,7 @@ src/research_agent/
 ├── search_tool.py    # web search behind SearchTool (incl. DuckDuckGo)
 ├── fetch_tool.py     # download + extract behind FetchTool
 ├── cache.py          # persistent URL fetch cache + CachingFetchTool
+├── chat.py           # interactive CLI follow-up chat (--chat)
 ├── prefetch.py       # parallel cache-warming after a search
 ├── llm_cache.py      # optional on-disk LLM response cache (--cache-llm)
 ├── recency.py        # detect time-sensitive questions (pure)

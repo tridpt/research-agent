@@ -179,6 +179,8 @@ bạn không cần bật gì:
 | `--prefetch` | Tải trước N kết quả đầu song song để đọc nhanh hơn (0 = tắt, mặc định 3) |
 | `--cache-llm` | Lưu & tái dùng phản hồi LLM cho prompt giống hệt |
 | `--reputation-file` | File JSON bổ sung domain uy tín/kém cho việc xếp hạng nguồn |
+| `--chat` | Sau báo cáo, hỏi nối tiếp ngay trên terminal (trả lời dựa trên báo cáo) |
+| `--lang` | Ép ngôn ngữ báo cáo/trả lời: `vi` hoặc `en` |
 | `--no-cache` | Tắt bộ nhớ đệm (không dùng lại trang đã tải) |
 | `--cache-dir` | Thư mục lưu bộ nhớ đệm |
 | `--model` | Đổi mô hình cho lần chạy này |
@@ -216,6 +218,14 @@ Dùng `--style` để chọn độ dài/độ sâu: `brief` (ngắn gọn), `sta
 .\run.ps1 "Định lý CAP là gì?" --style brief
 .\run.ps1 "Phân tích kiến trúc microservices" --style deep -v
 ```
+
+### Hỏi nối tiếp ngay trên terminal
+Thêm `--chat` để sau khi viết báo cáo, bạn hỏi tiếp ngay trong terminal (agent
+trả lời dựa trên báo cáo vừa tạo). Gõ dòng trống hoặc `quit` để thoát:
+```powershell
+.\run.ps1 "RAG là gì?" --chat
+```
+Khi chạy với `-v`, mỗi vòng còn hiển thị tiến độ so với giới hạn (số vòng/số nguồn).
 
 ---
 
@@ -301,6 +311,7 @@ Trình duyệt sẽ tự mở tại `http://localhost:8501`. Nếu không, mở 
 
 ### Cách dùng giao diện
 1. **Thanh bên trái (Cấu hình):**
+   - **Ngôn ngữ giao diện**: chuyển toàn bộ UI giữa Tiếng Việt / English (ở trên cùng).
    - Chọn **Nhà cung cấp LLM** (Groq / Gemini / OpenAI / tùy chỉnh).
    - Dán **API key** của bạn.
    - Base URL và Model sẽ tự điền sẵn theo nhà cung cấp.
@@ -319,6 +330,8 @@ Trình duyệt sẽ tự mở tại `http://localhost:8501`. Nếu không, mở 
 - **🌐 Ngôn ngữ báo cáo**: chọn tiếng Việt để báo cáo ra tiếng Việt dù nguồn là
   tiếng Anh.
 - **📏 Độ dài báo cáo**: chọn Ngắn gọn / Tiêu chuẩn / Chuyên sâu ở thanh bên.
+- **⚙️ Nâng cao**: chỉnh tải-trước song song, bật cache phản hồi LLM, và ưu tiên
+  thông tin mới ngay trong thanh bên.
 - **⬇️ Tải báo cáo**: dạng **Markdown**, **HTML**, **PDF trực tiếp**, hoặc
   **Word (.docx)** (PDF/Word hỗ trợ tiếng Việt; nếu máy thiếu gói/font, dùng nút
   HTML rồi "In → Lưu thành PDF").

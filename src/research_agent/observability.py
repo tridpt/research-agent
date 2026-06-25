@@ -8,6 +8,19 @@ from typing import TextIO
 from .models import TraceEvent, TraceEventType
 
 
+def format_budget_progress(rounds_used: int, sources_count: int, budget: object) -> str:
+    """Pure: a compact progress line against the research budget.
+
+    ``budget`` is any object exposing ``max_rounds`` and ``max_sources``.
+    """
+    max_rounds = getattr(budget, "max_rounds", 0)
+    max_sources = getattr(budget, "max_sources", 0)
+    return (
+        f"    progress: round {rounds_used}/{max_rounds} · "
+        f"sources {sources_count}/{max_sources}"
+    )
+
+
 def render_trace(event: TraceEvent, verbose: bool) -> str:
     """Pure: build a one-line human-readable description of a trace event.
 
@@ -36,16 +49,29 @@ def render_trace(event: TraceEvent, verbose: bool) -> str:
 class TraceEmitter:
     """Side-effecting sink that prints rendered trace lines to a stream."""
 
-    def __init__(self, verbose: bool = False, stream: TextIO | None = None) -> None:
+    def __init__(
+        self,
+        verbose: bool = False,
+        stream: TextIO | None = None,
+        budget: object | None = None,
+    ) -> None:
         self.verbose = verbose
         self._stream = stream if stream is not None else sys.stderr
+        self._budget = budget
 
     def __call__(self, event: TraceEvent) -> None:
-        print(render_trace(event, self.verbose), file=self._stream)
+        line = render_trace(event, self.verbose)
+        if self._budget is not None and event.type is TraceEventType.ROUND_COMPLETED:
+            line += "\n" + format_budget_progress(
+                event.round_index, event.sources_count, self._budget
+            )
+        print(line, file=self._stream)
 
 
-def make_emitter(verbose: bool, stream: TextIO | None = None) -> Callable[[TraceEvent], None]:
-    return TraceEmitter(verbose=verbose, stream=stream)
+def make_emitter(
+    verbose: bool, stream: TextIO | None = None, budget: object | None = None
+) -> Callable[[TraceEvent], None]:
+    return TraceEmitter(verbose=verbose, stream=stream, budget=budget)
 
 
 class CollectingEmitter:

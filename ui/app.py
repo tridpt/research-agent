@@ -34,6 +34,7 @@ from helpers import (  # noqa: E402
     report_to_html,
     save_history,
 )
+from i18n import t  # noqa: E402
 
 from research_agent.agent import run_session  # noqa: E402
 from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
@@ -65,53 +66,71 @@ from research_agent.url_safety import public_http_url_error  # noqa: E402
 from research_agent.usage import UsageTracker, format_usage  # noqa: E402
 
 
-def render_step_vi(event) -> str:
-    """Mô tả một bước của agent bằng tiếng Việt, thân thiện với người dùng."""
+def render_step(event, lang: str = "vi") -> str:
+    """Describe one agent step in a user-friendly way (Vietnamese or English)."""
+    vi = lang != "en"
     detail = event.detail or {}
     rnd = event.round_index
     if event.type is TraceEventType.ACTION_SELECTED:
         action = detail.get("action", "")
+        q = detail.get("query", "")
         if action == "search":
-            return f"🔍 Đang tìm kiếm trên web: “{detail.get('query', '')}”"
+            return (f"🔍 Đang tìm kiếm trên web: “{q}”" if vi else f"🔍 Searching the web: “{q}”")
         if action == "read":
-            return f"📖 Đang đọc nguồn: {detail.get('url', '')}"
+            u = detail.get("url", "")
+            return (f"📖 Đang đọc nguồn: {u}" if vi else f"📖 Reading source: {u}")
         if action == "finish":
-            return "✅ Đã đủ thông tin — bắt đầu viết báo cáo"
+            return ("✅ Đã đủ thông tin — bắt đầu viết báo cáo" if vi
+                    else "✅ Enough information — writing the report")
         if action == "calculate":
-            return f"🧮 Đang tính toán: {detail.get('expression', '')}"
+            e = detail.get("expression", "")
+            return (f"🧮 Đang tính toán: {e}" if vi else f"🧮 Calculating: {e}")
         if action == "get_weather":
-            return f"🌦️ Đang lấy thời tiết: {detail.get('location', '')}"
+            loc = detail.get("location", "")
+            return (f"🌦️ Đang lấy thời tiết: {loc}" if vi else f"🌦️ Getting weather: {loc}")
         if action == "get_stock":
-            return f"📈 Đang lấy dữ liệu chứng khoán: {detail.get('symbol', '')}"
+            s = detail.get("symbol", "")
+            return (f"📈 Đang lấy dữ liệu chứng khoán: {s}" if vi else f"📈 Getting stock quote: {s}")
         if action == "get_wikipedia":
-            return f"📚 Đang tra Wikipedia: {detail.get('topic', '')}"
+            tpc = detail.get("topic", "")
+            return (f"📚 Đang tra Wikipedia: {tpc}" if vi else f"📚 Looking up Wikipedia: {tpc}")
         if action == "arxiv_search":
-            return f"🎓 Đang tìm bài báo arXiv: {detail.get('paper_query', '')}"
+            pq = detail.get("paper_query", "")
+            return (f"🎓 Đang tìm bài báo arXiv: {pq}" if vi else f"🎓 Searching arXiv: {pq}")
         if action == "convert":
-            return f"🔁 Đang chuyển đổi: {detail.get('conversion', '')}"
+            c = detail.get("conversion", "")
+            return (f"🔁 Đang chuyển đổi: {c}" if vi else f"🔁 Converting: {c}")
         if action == "get_news":
-            return f"📰 Đang tìm tin gần đây: {detail.get('news_query', '')}"
+            nq = detail.get("news_query", "")
+            return (f"📰 Đang tìm tin gần đây: {nq}" if vi else f"📰 Finding recent news: {nq}")
         if action == "get_github":
-            return f"🐙 Đang tra GitHub: {detail.get('repo', '')}"
+            r = detail.get("repo", "")
+            return (f"🐙 Đang tra GitHub: {r}" if vi else f"🐙 Looking up GitHub: {r}")
         if action == "now":
-            return "🗓️ Đang lấy ngày giờ hiện tại"
+            return ("🗓️ Đang lấy ngày giờ hiện tại" if vi else "🗓️ Getting the current date/time")
         if action == "plan":
             subs = detail.get("sub_questions", "")
-            return "🧩 Lập kế hoạch, chia thành các câu hỏi nhỏ:\n   • " + subs.replace(" | ", "\n   • ")
-        return f"⚙️ Hành động: {action}"
+            head = ("🧩 Lập kế hoạch, chia thành các câu hỏi nhỏ:" if vi
+                    else "🧩 Planning — splitting into sub-questions:")
+            return head + "\n   • " + subs.replace(" | ", "\n   • ")
+        return (f"⚙️ Hành động: {action}" if vi else f"⚙️ Action: {action}")
     if event.type is TraceEventType.ROUND_COMPLETED:
-        return f"   ↳ Xong vòng {rnd} · đã thu thập {event.sources_count} nguồn"
+        return (f"   ↳ Xong vòng {rnd} · đã thu thập {event.sources_count} nguồn" if vi
+                else f"   ↳ Round {rnd} done · {event.sources_count} sources collected")
     err = detail.get("error", "")
     if "already read" in err:
-        return "   ⚠️ Nguồn này đã đọc rồi, bỏ qua"
+        return ("   ⚠️ Nguồn này đã đọc rồi, bỏ qua" if vi else "   ⚠️ Already read this source, skipping")
     if "domain cap" in err:
-        return "   ⚠️ Đã đủ nguồn từ trang này, chuyển sang trang khác"
+        return ("   ⚠️ Đã đủ nguồn từ trang này, chuyển sang trang khác" if vi
+                else "   ⚠️ Enough from this site, switching to another")
     if "previously failed" in err or "substituting" in err:
-        return "   ↻ Nguồn lỗi, tự chuyển sang nguồn khác"
+        return ("   ↻ Nguồn lỗi, tự chuyển sang nguồn khác" if vi
+                else "   ↻ Source failed, switching to another")
     if "fetch" in err or "HTTP" in err or "SSL" in err:
-        return "   ⚠️ Không tải được trang này (có thể bị chặn), thử nguồn khác"
+        return ("   ⚠️ Không tải được trang này (có thể bị chặn), thử nguồn khác" if vi
+                else "   ⚠️ Couldn't load this page (maybe blocked), trying another")
     if "search" in err:
-        return "   ⚠️ Tìm kiếm không có kết quả, thử lại"
+        return ("   ⚠️ Tìm kiếm không có kết quả, thử lại" if vi else "   ⚠️ Search returned nothing, retrying")
     return f"   ⚠️ {err}"
 
 
@@ -125,8 +144,9 @@ PRESETS = {
 QUALITY_LABELS_VI = {"high": "Cao", "medium": "Trung bình", "low": "Thấp"}
 
 st.set_page_config(page_title="Research Agent", page_icon="🔎", layout="wide")
-st.title("🔎 Research Agent")
-st.caption("Trợ lý nghiên cứu tự động: tìm web, đọc nguồn, viết báo cáo có trích dẫn.")
+UI_LANG = "en" if st.session_state.get("ui_lang") == "English" else "vi"
+st.title(t(UI_LANG, "app_title"))
+st.caption(t(UI_LANG, "app_caption"))
 
 
 # --------------------------------------------------------------------------
@@ -174,24 +194,25 @@ if "history" not in st.session_state:
 # Sidebar: configuration
 # --------------------------------------------------------------------------
 with st.sidebar:
-    st.header("⚙️ Cấu hình")
+    st.radio("🌐 Ngôn ngữ giao diện / Interface language", ["Tiếng Việt", "English"], key="ui_lang")
+    st.header(t(UI_LANG, "cfg_header"))
 
     _saved_provider = _SAVED.get("RESEARCH_AGENT_PROVIDER_LABEL", "Groq")
     _provider_names = list(PRESETS.keys())
     _provider_index = _provider_names.index(_saved_provider) if _saved_provider in _provider_names else 0
-    provider = st.selectbox("Nhà cung cấp LLM", _provider_names, index=_provider_index)
+    provider = st.selectbox(t(UI_LANG, "provider_label"), _provider_names, index=_provider_index)
     preset_url, preset_model = PRESETS[provider]
 
     api_key = st.text_input(
-        "API key",
+        t(UI_LANG, "api_key_label"),
         type="password",
         value=_initial("RESEARCH_AGENT_API_KEY"),
-        help="Bấm 'Lưu cấu hình' bên dưới để nhớ lâu dài (ghi vào file .env).",
+        help=t(UI_LANG, "api_key_help"),
     )
-    base_url = st.text_input("Base URL", value=_initial("RESEARCH_AGENT_BASE_URL", preset_url))
-    model = st.text_input("Model", value=_initial("RESEARCH_AGENT_MODEL", preset_model))
+    base_url = st.text_input(t(UI_LANG, "base_url_label"), value=_initial("RESEARCH_AGENT_BASE_URL", preset_url))
+    model = st.text_input(t(UI_LANG, "model_label"), value=_initial("RESEARCH_AGENT_MODEL", preset_model))
 
-    if st.button("💾 Lưu cấu hình", use_container_width=True):
+    if st.button(t(UI_LANG, "save_cfg_btn"), use_container_width=True):
         save_env_file(
             {
                 "RESEARCH_AGENT_API_KEY": api_key,
@@ -201,50 +222,77 @@ with st.sidebar:
                 "RESEARCH_AGENT_TAVILY_API_KEY": st.session_state.get("tavily_key_val", ""),
             }
         )
-        st.success("Đã lưu vào .env — lần sau mở app sẽ tự điền sẵn.")
+        st.success(t(UI_LANG, "save_cfg_ok"))
 
     st.divider()
+    _mode_options = ["Thường", "Tự đánh giá (reflect)", "Đa agent (multi-agent)"]
+    _mode_labels = {
+        "Thường": ("Thường" if UI_LANG == "vi" else "Normal"),
+        "Tự đánh giá (reflect)": ("Tự đánh giá (reflect)" if UI_LANG == "vi" else "Self-review (reflect)"),
+        "Đa agent (multi-agent)": ("Đa agent (multi-agent)" if UI_LANG == "vi" else "Multi-agent"),
+    }
     mode = st.radio(
-        "Chế độ nghiên cứu",
-        ["Thường", "Tự đánh giá (reflect)", "Đa agent (multi-agent)"],
-        help="Reflect: tự chấm điểm và đào sâu. Multi-agent: chia nhỏ câu hỏi.",
+        t(UI_LANG, "mode_label"),
+        _mode_options,
+        format_func=lambda m: _mode_labels[m],
+        help=t(UI_LANG, "mode_help"),
     )
 
+    _lang_options = ["Tiếng Việt", "English", "Tự động (theo câu hỏi)"]
+    _lang_labels = {
+        "Tiếng Việt": t(UI_LANG, "lang_vi"),
+        "English": t(UI_LANG, "lang_en"),
+        "Tự động (theo câu hỏi)": t(UI_LANG, "lang_auto"),
+    }
     lang_label = st.radio(
-        "Ngôn ngữ báo cáo",
-        ["Tiếng Việt", "English", "Tự động (theo câu hỏi)"],
-        help="Chọn ngôn ngữ cho báo cáo cuối cùng.",
+        t(UI_LANG, "report_lang_label"),
+        _lang_options,
+        format_func=lambda x: _lang_labels[x],
+        help=t(UI_LANG, "report_lang_help"),
     )
     lang_code = {"Tiếng Việt": "vi", "English": "en"}.get(lang_label)
 
+    _style_options = ["Tiêu chuẩn", "Ngắn gọn", "Chuyên sâu"]
+    _style_labels = {
+        "Tiêu chuẩn": t(UI_LANG, "style_standard"),
+        "Ngắn gọn": t(UI_LANG, "style_brief"),
+        "Chuyên sâu": t(UI_LANG, "style_deep"),
+    }
     style_label = st.radio(
-        "Độ dài báo cáo",
-        ["Tiêu chuẩn", "Ngắn gọn", "Chuyên sâu"],
-        help="Ngắn gọn: tóm tắt nhanh. Chuyên sâu: phân tích kỹ, nhiều mục.",
+        t(UI_LANG, "style_label"),
+        _style_options,
+        format_func=lambda x: _style_labels[x],
+        help=t(UI_LANG, "style_help"),
     )
     style_code = {"Ngắn gọn": "brief", "Tiêu chuẩn": "standard", "Chuyên sâu": "deep"}[style_label]
 
     st.divider()
-    st.subheader("Giới hạn")
-    max_rounds = st.slider("Số vòng tối đa", 2, 20, 8)
-    max_sources = st.slider("Số nguồn tối đa", 1, 10, 3)
-    min_domains = st.slider("Số tên miền tối thiểu", 1, 5, 2)
-    per_source_chars = st.slider("Ký tự mỗi nguồn", 800, 6000, 2000, step=200,
-                                 help="Giảm nếu gặp lỗi 'request too large' trên free tier.")
-    round_delay = st.slider("Độ trễ giữa các vòng (giây)", 0.0, 10.0, 0.0, step=0.5,
-                            help="Tăng lên (vd 3-5s) nếu hay gặp lỗi 429 trên free tier như Groq.")
+    st.subheader(t(UI_LANG, "limits_header"))
+    max_rounds = st.slider(t(UI_LANG, "max_rounds"), 2, 20, 8)
+    max_sources = st.slider(t(UI_LANG, "max_sources"), 1, 10, 3)
+    min_domains = st.slider(t(UI_LANG, "min_domains"), 1, 5, 2)
+    per_source_chars = st.slider(t(UI_LANG, "per_source_chars"), 800, 6000, 2000, step=200,
+                                 help=t(UI_LANG, "per_source_help"))
+    round_delay = st.slider(t(UI_LANG, "round_delay"), 0.0, 10.0, 0.0, step=0.5,
+                            help=t(UI_LANG, "round_delay_help"))
+
+    st.divider()
+    st.subheader(t(UI_LANG, "advanced_header"))
+    prefetch_count = st.slider(t(UI_LANG, "prefetch_label"), 0, 10, 3, help=t(UI_LANG, "prefetch_help"))
+    cache_llm = st.checkbox(t(UI_LANG, "cache_llm_label"), value=False, help=t(UI_LANG, "cache_llm_help"))
+    recency_boost = st.checkbox(t(UI_LANG, "recency_label"), value=False, help=t(UI_LANG, "recency_help"))
 
     tavily_key = st.text_input(
-        "Tavily API key (tùy chọn)", type="password",
+        t(UI_LANG, "tavily_label"), type="password",
         value=_initial("RESEARCH_AGENT_TAVILY_API_KEY"),
         key="tavily_key_val",
-        help="Để trống thì dùng DuckDuckGo miễn phí.",
+        help=t(UI_LANG, "tavily_help"),
     )
 
     selected_pdf = st.file_uploader(
-        "PDF cho phép agent đọc (tùy chọn)",
+        t(UI_LANG, "pdf_label"),
         type=["pdf"],
-        help="Chỉ dùng cho lượt chạy này, tối đa 20 MB; file sẽ bị xóa ngay sau đó.",
+        help=t(UI_LANG, "pdf_help"),
     )
 
 
@@ -261,6 +309,7 @@ def _build_settings():
         "min_domains": min_domains,
         "per_source_char_limit": per_source_chars,
         "round_delay_seconds": round_delay,
+        "prefetch_count": prefetch_count,
         "verbose": True,
     }
     return resolve_settings(env=dict(os.environ), cli_overrides=overrides)
@@ -275,12 +324,18 @@ def _build_search(settings):
 
 
 def _build_llm(settings, usage=None):
-    return RetryingLLMProvider(
+    llm = RetryingLLMProvider(
         OpenAICompatibleProvider(
             api_key=settings.api_key, base_url=settings.base_url, model=settings.model, usage=usage
         ),
         max_attempts=settings.max_llm_attempts,
     )
+    if cache_llm:
+        from pathlib import Path as _Path
+
+        from research_agent.llm_cache import CachingLLMProvider, LLMResponseCache
+        llm = CachingLLMProvider(llm, LLMResponseCache(_Path(".research_agent_cache") / "llm"), settings.model)
+    return llm
 
 
 def _prepare_selected_pdf(uploaded_file):
@@ -327,14 +382,14 @@ def _show_llm_error(exc: LLMError, retry_key: str | None = None) -> None:
 # Main: question + run
 # --------------------------------------------------------------------------
 auto_retry_research = bool(st.session_state.pop("_retry_research", False))
-question = st.text_input("Câu hỏi nghiên cứu của bạn", placeholder="Ví dụ: Sự khác nhau giữa SQL và NoSQL là gì?")
-run_clicked = st.button("🚀 Bắt đầu nghiên cứu", type="primary", use_container_width=True) or auto_retry_research
+question = st.text_input(t(UI_LANG, "question_label"), placeholder=t(UI_LANG, "question_placeholder"))
+run_clicked = st.button(t(UI_LANG, "run_btn"), type="primary", use_container_width=True) or auto_retry_research
 
 if run_clicked:
     if not question.strip():
-        st.error("Vui lòng nhập câu hỏi.")
+        st.error(t(UI_LANG, "err_question"))
     elif not api_key.strip():
-        st.error("Vui lòng nhập API key ở thanh bên.")
+        st.error(t(UI_LANG, "err_api_key"))
     else:
         try:
             settings = _build_settings()
@@ -362,12 +417,18 @@ if run_clicked:
             url_validator=public_http_url_error,
         )
 
-        st.subheader("🧠 Agent đang làm gì")
+        # Optional recency steering (checkbox or auto-detected from the question).
+        from research_agent.recency import recency_directive, wants_recency
+        research_directive = (
+            recency_directive() if (recency_boost or wants_recency(question)) else None
+        )
+
+        st.subheader(t(UI_LANG, "agent_working"))
         steps_box = st.empty()
         steps: list[str] = []
 
         def _on_event(line: str, event) -> None:
-            steps.append(render_step_vi(event))
+            steps.append(render_step(event, UI_LANG))
             steps_box.markdown("\n\n".join(steps[-25:]))
 
         emit = CollectingEmitter(verbose=True, on_event=_on_event)
@@ -377,12 +438,13 @@ if run_clicked:
         report = None
         stream_in_normal = mode.startswith("Thường")
 
-        with st.status("Đang nghiên cứu...", expanded=True) as status:
+        with st.status(t(UI_LANG, "researching"), expanded=True) as status:
             try:
                 if mode.startswith("Đa agent"):
                     report = run_multi_agent(question, settings, llm, search, fetch, synth_fn, time.time, emit)
                 elif mode.startswith("Tự đánh giá"):
-                    report = run_with_reflection(question, settings, llm, search, fetch, synth_fn, time.time, emit)
+                    report = run_with_reflection(question, settings, llm, search, fetch, synth_fn,
+                                                 time.time, emit, directive=research_directive)
                 elif stream_in_normal:
                     # Normal mode: gather sources first (no synthesis), so we can
                     # stream the report text afterwards.
@@ -401,13 +463,15 @@ if run_clicked:
                         time.time,
                         emit,
                         initial_state=state,
+                        directive=research_directive,
                     )
                     gathered = list(pre.sources)
                 else:
-                    report = run_session(question, settings, llm, search, fetch, synth_fn, time.time, emit)
-                status.update(label="Hoàn tất!", state="complete")
+                    report = run_session(question, settings, llm, search, fetch, synth_fn,
+                                         time.time, emit, directive=research_directive)
+                status.update(label=t(UI_LANG, "done"), state="complete")
             except LLMError as exc:
-                status.update(label="Lỗi", state="error")
+                status.update(label=t(UI_LANG, "error"), state="error")
                 _show_llm_error(exc, retry_key="retry_research")
                 st.stop()
 
@@ -415,7 +479,7 @@ if run_clicked:
         # that is cleared afterwards, so the final formatted report below is the
         # single source of truth).
         if stream_in_normal:
-            st.subheader("📄 Báo cáo (đang viết...)")
+            st.subheader(t(UI_LANG, "report_writing"))
             stream_area = st.empty()
             gen = synthesize_stream(
                 question,
@@ -486,14 +550,10 @@ history = st.session_state.get("history", [])
 if history:
     latest = history[0]
 
-    st.subheader("📄 Báo cáo")
+    st.subheader(t(UI_LANG, "report_header"))
     st.markdown(latest["markdown"])
 
-    st.info(
-        f"⏱️ Thời gian: {latest['elapsed']:.1f} giây  ·  "
-        f"📚 Số nguồn: {len(latest['sources'])}  ·  "
-        f"🔧 Chế độ: {latest['mode']}"
-    )
+    st.info(t(UI_LANG, "stats_line", elapsed=latest["elapsed"], n=len(latest["sources"]), mode=latest["mode"]))
     if latest.get("usage"):
         st.caption(f"🧮 {latest['usage']}")
 
@@ -501,7 +561,7 @@ if history:
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.download_button(
-            "⬇️ Markdown (.md)",
+            t(UI_LANG, "dl_md"),
             data=latest["markdown"],
             file_name="bao-cao.md",
             mime="text/markdown",
@@ -509,12 +569,12 @@ if history:
         )
     with c2:
         st.download_button(
-            "⬇️ HTML",
+            t(UI_LANG, "dl_html"),
             data=report_to_html(latest["question"], latest["markdown"]),
             file_name="bao-cao.html",
             mime="text/html",
             use_container_width=True,
-            help="Mở file HTML rồi dùng 'In → Lưu thành PDF' của trình duyệt.",
+            help=t(UI_LANG, "dl_html_help"),
         )
     with c3:
         try:
@@ -522,19 +582,19 @@ if history:
 
             pdf_bytes = render_pdf_bytes(latest["question"], latest["markdown"])
             st.download_button(
-                "⬇️ PDF (.pdf)",
+                t(UI_LANG, "dl_pdf"),
                 data=pdf_bytes,
                 file_name="bao-cao.pdf",
                 mime="application/pdf",
                 use_container_width=True,
-                help="Xuất PDF trực tiếp (hỗ trợ tiếng Việt).",
+                help=t(UI_LANG, "dl_pdf_help"),
             )
         except Exception:  # noqa: BLE001 - fall back gracefully to HTML export
             st.button(
-                "⬇️ PDF (.pdf)",
+                t(UI_LANG, "dl_pdf"),
                 disabled=True,
                 use_container_width=True,
-                help="Cần gói 'fpdf2' và một font Unicode. Hãy dùng nút HTML rồi in ra PDF.",
+                help=t(UI_LANG, "dl_pdf_disabled"),
             )
     with c4:
         try:
@@ -542,25 +602,25 @@ if history:
 
             docx_bytes = render_docx_bytes(latest["question"], latest["markdown"])
             st.download_button(
-                "⬇️ Word (.docx)",
+                t(UI_LANG, "dl_docx"),
                 data=docx_bytes,
                 file_name="bao-cao.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
-                help="Xuất file Word mở được trực tiếp.",
+                help=t(UI_LANG, "dl_docx_help"),
             )
         except Exception:  # noqa: BLE001 - fall back gracefully
             st.button(
-                "⬇️ Word (.docx)",
+                t(UI_LANG, "dl_docx"),
                 disabled=True,
                 use_container_width=True,
-                help="Cần gói 'python-docx'. Cài: pip install python-docx",
+                help=t(UI_LANG, "dl_docx_disabled"),
             )
 
     # --- Source preview: click to expand the text the agent actually read ---
-    st.subheader("📚 Nguồn đã dùng")
+    st.subheader(t(UI_LANG, "sources_header"))
     if not latest["sources"]:
-        st.caption("Không có nguồn nào.")
+        st.caption(t(UI_LANG, "no_sources"))
     for i, s in enumerate(latest["sources"], 1):
         display_name = s.get("label", source_display_name(s["url"]))
         legacy_quality = assess_source(s["url"], s.get("preview"))
@@ -570,24 +630,24 @@ if history:
         quality_label = QUALITY_LABELS_VI.get(quality, "Chưa rõ")
         with st.expander(f"{i}. {display_name} · {quality_label} ({score}/100)"):
             if is_local_pdf_source(s["url"]):
-                st.caption("PDF bạn đã cung cấp; không có trang web gốc.")
+                st.caption(t(UI_LANG, "pdf_no_origin"))
             else:
-                st.link_button("🔗 Mở trang gốc", s["url"])
+                st.link_button(t(UI_LANG, "open_source"), s["url"])
             if s.get("quality_reason"):
                 st.caption("Đánh giá tự động (tham khảo): " + s["quality_reason"])
             if not s.get("quality_reason") and reason:
                 st.caption("Automatic quality estimate: " + reason)
             preview = s.get("preview") or ""
             if preview:
-                st.caption("Trích đoạn nội dung agent đã đọc:")
+                st.caption(t(UI_LANG, "preview_caption"))
                 st.text(preview + ("…" if len(preview) >= 1500 else ""))
             else:
-                st.caption("(Không có nội dung xem trước.)")
+                st.caption(t(UI_LANG, "no_preview"))
 
 
     # --- Follow-up chat grounded in the latest report ---
-    st.subheader("💬 Hỏi tiếp về báo cáo")
-    st.caption("Đặt câu hỏi nối tiếp; agent trả lời dựa trên báo cáo và nguồn ở trên.")
+    st.subheader(t(UI_LANG, "chat_header"))
+    st.caption(t(UI_LANG, "chat_caption"))
 
     if "chat" not in st.session_state:
         st.session_state["chat"] = []
@@ -596,10 +656,10 @@ if history:
         with st.chat_message(turn["role"]):
             st.markdown(turn["content"])
 
-    follow_up = st.chat_input("Ví dụ: Tóm tắt ngắn gọn trong 3 ý chính giúp tôi")
+    follow_up = st.chat_input(t(UI_LANG, "chat_placeholder"))
     if follow_up:
         if not api_key.strip():
-            st.error("Vui lòng nhập API key ở thanh bên để hỏi tiếp.")
+            st.error(t(UI_LANG, "chat_need_key"))
         else:
             st.session_state["chat"].append({"role": "user", "content": follow_up})
             with st.chat_message("user"):
@@ -633,7 +693,7 @@ if history:
                 messages.append(Message(role=turn["role"], content=turn["content"]))
 
             with st.chat_message("assistant"):
-                with st.spinner("Đang trả lời..."):
+                with st.spinner(t(UI_LANG, "answering")):
                     try:
                         answer = chat_llm.generate(messages)
                     except LLMError as exc:
@@ -650,30 +710,27 @@ if history:
 # Side-by-side model comparison
 # --------------------------------------------------------------------------
 st.divider()
-with st.expander("⚖️ So sánh nhiều model song song"):
-    st.caption(
-        "Chạy cùng một câu hỏi qua nhiều model (chế độ thường) và xem báo cáo "
-        "cùng các chỉ số bên cạnh nhau. Mỗi model dùng API key/base URL ở thanh bên."
-    )
+with st.expander(t(UI_LANG, "compare_expander")):
+    st.caption(t(UI_LANG, "compare_caption"))
     compare_question = st.text_input(
-        "Câu hỏi để so sánh",
+        t(UI_LANG, "compare_question"),
         value=question or "",
         key="compare_question",
     )
     compare_models_text = st.text_input(
-        "Danh sách model (phân tách bằng dấu phẩy, tối đa 4)",
+        t(UI_LANG, "compare_models"),
         value=model,
         key="compare_models",
-        help="Ví dụ: openai/gpt-oss-20b, llama-3.3-70b-versatile",
+        help=t(UI_LANG, "compare_models_help"),
     )
-    if st.button("⚖️ Chạy so sánh", use_container_width=True, key="run_compare"):
+    if st.button(t(UI_LANG, "compare_btn"), use_container_width=True, key="run_compare"):
         models_to_compare = parse_model_list(compare_models_text)
         if not compare_question.strip():
-            st.error("Vui lòng nhập câu hỏi để so sánh.")
+            st.error(t(UI_LANG, "err_question"))
         elif not api_key.strip():
-            st.error("Vui lòng nhập API key ở thanh bên.")
+            st.error(t(UI_LANG, "err_api_key"))
         elif len(models_to_compare) < 2:
-            st.error("Hãy nhập ít nhất 2 model khác nhau để so sánh.")
+            st.error(t(UI_LANG, "compare_err_models"))
         else:
             try:
                 base_settings = _build_settings()
@@ -719,9 +776,9 @@ with st.expander("⚖️ So sánh nhiều model song song"):
 # --------------------------------------------------------------------------
 if history:
     st.divider()
-    st.subheader("🕘 Lịch sử nghiên cứu")
-    st.caption("Được lưu vào file, vẫn còn sau khi tắt/mở lại app.")
-    if st.button("🗑️ Xóa toàn bộ lịch sử"):
+    st.subheader(t(UI_LANG, "history_header"))
+    st.caption(t(UI_LANG, "history_caption"))
+    if st.button(t(UI_LANG, "clear_history")):
         st.session_state["history"] = []
         save_history([])
         st.rerun()

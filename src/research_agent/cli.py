@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .agent import run_session
 from .cache import CachingFetchTool, FetchCache
+from .chat import run_chat_loop
 from .config import ENV_REPUTATION_FILE, resolve_settings
 from .errors import ConfigError, LLMError, ReportWriteError
 from .fetch_tool import FetchTool, HttpFetchTool
@@ -101,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Cache LLM responses on disk and reuse them for identical prompts.")
     p.add_argument("--reputation-file", dest="reputation_file",
                    help="JSON file of extra established/low-evidence domains for source ranking.")
+    p.add_argument("--chat", action="store_true",
+                   help="After the report, ask follow-up questions interactively in the terminal.")
+    p.add_argument("--lang", dest="language", choices=["vi", "en"],
+                   help="Force the report/answer language (default: follow the question).")
     return p
 
 
@@ -194,10 +199,11 @@ def main(argv: Sequence[str]) -> int:
 
     # Build search (provider fallback) and fetch (cached unless --no-cache).
     search, fetch = _build_search_and_fetch(settings, use_cache=not getattr(args, "no_cache", False))
-    emit = make_emitter(settings.verbose)
+    emit = make_emitter(settings.verbose, budget=settings.budget if settings.verbose else None)
 
-    # Apply the configured report style to every synthesis path.
-    synth_fn = partial(synthesize, style=settings.report_style)
+    # Apply the configured report style + language to every synthesis path.
+    language = getattr(args, "language", None)
+    synth_fn = partial(synthesize, style=settings.report_style, language=language)
 
     # Compose trusted directives: long-term memory recall + recency guidance.
     directives: list[str] = []
@@ -302,6 +308,9 @@ def main(argv: Sequence[str]) -> int:
     print(f"\nReport written to: {written}")
     print("\n--- Summary ---")
     print(_summary(report))
+
+    if getattr(args, "chat", False):
+        run_chat_loop(markdown, llm, input, lambda text: print(text), language=language)
     return 0
 
 
