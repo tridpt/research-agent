@@ -7,6 +7,8 @@ from research_agent.evaluate import (
     evaluate_modes,
     evaluate_report,
     format_comparison_markdown,
+    llm_quality_score,
+    parse_quality_judgement,
 )
 from research_agent.models import Citation, Report, Source
 
@@ -100,3 +102,32 @@ def test_compare_and_format_comparison_markdown() -> None:
 
 def test_format_comparison_markdown_handles_empty() -> None:
     assert "No evaluation results" in format_comparison_markdown({})
+
+
+def test_parse_quality_judgement_valid_and_clamped() -> None:
+    j = parse_quality_judgement('{"score": 8, "rationale": "well grounded"}')
+    assert j.score == 8
+    assert j.rationale == "well grounded"
+    # Out-of-range scores clamp into [0, 10].
+    assert parse_quality_judgement({"score": 99}).score == 10
+    assert parse_quality_judgement({"score": -5}).score == 0
+
+
+def test_parse_quality_judgement_malformed_is_conservative() -> None:
+    assert parse_quality_judgement("not json").score == 0
+    assert parse_quality_judgement({"nope": 1}).score == 0
+
+
+class _JudgeLLM:
+    def __init__(self, raw: str) -> None:
+        self._raw = raw
+
+    def generate(self, messages) -> str:
+        return self._raw
+
+
+def test_llm_quality_score_uses_provider() -> None:
+    report = _report(["https://a.com"], ["https://a.com"], body="An answer [1].")
+    judgement = llm_quality_score(report, _JudgeLLM('{"score": 7, "rationale": "ok"}'))
+    assert judgement.score == 7
+    assert judgement.rationale == "ok"

@@ -176,6 +176,9 @@ bạn không cần bật gì:
 | `--memory` | Nhớ kết quả nghiên cứu cũ và gợi lại khi gặp câu hỏi liên quan |
 | `--memory-file` | Đường dẫn file lưu bộ nhớ (mặc định `.research_agent_memory.json`) |
 | `--style` | Độ dài/độ sâu báo cáo: `brief` (ngắn), `standard` (mặc định), `deep` (chuyên sâu) |
+| `--prefetch` | Tải trước N kết quả đầu song song để đọc nhanh hơn (0 = tắt, mặc định 3) |
+| `--cache-llm` | Lưu & tái dùng phản hồi LLM cho prompt giống hệt |
+| `--reputation-file` | File JSON bổ sung domain uy tín/kém cho việc xếp hạng nguồn |
 | `--no-cache` | Tắt bộ nhớ đệm (không dùng lại trang đã tải) |
 | `--cache-dir` | Thư mục lưu bộ nhớ đệm |
 | `--model` | Đổi mô hình cho lần chạy này |

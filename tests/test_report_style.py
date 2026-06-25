@@ -8,6 +8,13 @@ from research_agent.synthesizer import style_instruction, synthesize
 from .fakes import ScriptedLLM
 
 
+def test_resolve_settings_prefetch_count_default_and_override() -> None:
+    assert resolve_settings(env={ENV_API_KEY: "k"}, cli_overrides={}).prefetch_count == 3
+    assert resolve_settings(env={ENV_API_KEY: "k"}, cli_overrides={"prefetch_count": 0}).prefetch_count == 0
+    # Negative values clamp to 0.
+    assert resolve_settings(env={ENV_API_KEY: "k"}, cli_overrides={"prefetch_count": -2}).prefetch_count == 0
+
+
 def test_style_instruction_brief_and_deep_differ() -> None:
     assert "BRIEF" in style_instruction("brief")
     assert "IN-DEPTH" in style_instruction("deep")

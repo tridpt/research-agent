@@ -32,6 +32,8 @@ ENV_CACHE_DIR = "RESEARCH_AGENT_CACHE_DIR"
 ENV_CACHE_TTL = "RESEARCH_AGENT_CACHE_TTL"
 ENV_ROUND_DELAY = "RESEARCH_AGENT_ROUND_DELAY"
 ENV_STYLE = "RESEARCH_AGENT_STYLE"
+ENV_PREFETCH = "RESEARCH_AGENT_PREFETCH"
+ENV_REPUTATION_FILE = "RESEARCH_AGENT_REPUTATION_FILE"
 
 # Maps an optional setting key -> the env var that supplies it.
 _ENV_FOR = {
@@ -51,6 +53,7 @@ _ENV_FOR = {
     "cache_ttl": ENV_CACHE_TTL,
     "round_delay_seconds": ENV_ROUND_DELAY,
     "report_style": ENV_STYLE,
+    "prefetch_count": ENV_PREFETCH,
 }
 
 
@@ -71,6 +74,7 @@ class Defaults:
     cache_ttl: float = 0.0
     round_delay_seconds: float = 0.0
     report_style: str = "standard"
+    prefetch_count: int = 3
 
 
 DEFAULTS = Defaults()
@@ -159,6 +163,7 @@ def resolve_settings(
     report_style = str(style_raw).strip().lower() if style_raw else defaults.report_style
     if report_style not in ("brief", "standard", "deep"):
         report_style = defaults.report_style
+    prefetch_count = max(0, _as_int(_resolve("prefetch_count", cli_overrides, env), defaults.prefetch_count))
     cache_raw = _resolve("cache_dir", cli_overrides, env)
     cache_dir = Path(str(cache_raw)) if cache_raw else None
     allowed_pdf_paths = _parse_paths(cli_overrides.get("pdf_paths"))
@@ -182,4 +187,5 @@ def resolve_settings(
         round_delay_seconds=round_delay,
         allowed_pdf_paths=allowed_pdf_paths,
         report_style=report_style,
+        prefetch_count=prefetch_count,
     )

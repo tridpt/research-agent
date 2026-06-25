@@ -5,9 +5,11 @@ official and evidence-rich sources while keeping the reasons visible to users.
 """
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from .models import SearchResult, Source
@@ -68,6 +70,59 @@ _ESTABLISHED_HOSTS = {
 def _host_matches(host: str, domains: frozenset[str] | set[str]) -> bool:
     """Pure: True iff ``host`` equals or is a subdomain of any listed domain."""
     return any(host == domain or host.endswith("." + domain) for domain in domains)
+
+
+# Snapshots of the built-in defaults so a loaded reputation file augments rather
+# than replaces them, and so ``reset_reputation`` can restore them.
+_DEFAULT_ESTABLISHED_HOSTS = frozenset(_ESTABLISHED_HOSTS)
+_DEFAULT_LOW_EVIDENCE_HOSTS = frozenset(_LOW_EVIDENCE_HOSTS)
+
+
+def _clean_hosts(values: object) -> set[str]:
+    """Pure: normalize an iterable of domain strings into a lowercase set."""
+    if not isinstance(values, (list, tuple, set, frozenset)):
+        return set()
+    return {str(v).strip().lower().lstrip(".") for v in values if str(v).strip()}
+
+
+def apply_reputation(established: set[str] | None = None, low_evidence: set[str] | None = None) -> None:
+    """Augment the built-in reputation lists with extra domains (configuration).
+
+    Passing a set adds those domains on top of the built-in defaults; the change
+    affects subsequent ``assess_source`` calls.
+    """
+    global _ESTABLISHED_HOSTS, _LOW_EVIDENCE_HOSTS
+    _ESTABLISHED_HOSTS = set(_DEFAULT_ESTABLISHED_HOSTS) | (established or set())
+    _LOW_EVIDENCE_HOSTS = set(_DEFAULT_LOW_EVIDENCE_HOSTS) | (low_evidence or set())
+
+
+def reset_reputation() -> None:
+    """Restore the built-in reputation lists (used by tests)."""
+    global _ESTABLISHED_HOSTS, _LOW_EVIDENCE_HOSTS
+    _ESTABLISHED_HOSTS = set(_DEFAULT_ESTABLISHED_HOSTS)
+    _LOW_EVIDENCE_HOSTS = set(_DEFAULT_LOW_EVIDENCE_HOSTS)
+
+
+def load_reputation_file(path: str | Path) -> tuple[set[str], set[str]]:
+    """Read a JSON reputation file -> (established, low_evidence) domain sets.
+
+    Expected shape: {"established": ["reuters.com", ...],
+                     "low_evidence": ["example-forum.com", ...]}.
+    Raises ValueError if the file is missing or malformed.
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"could not read reputation file {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("reputation file must be a JSON object")
+    return _clean_hosts(data.get("established")), _clean_hosts(data.get("low_evidence"))
+
+
+def configure_reputation_from_file(path: str | Path) -> None:
+    """Load a reputation file and apply it (raises ValueError on failure)."""
+    established, low_evidence = load_reputation_file(path)
+    apply_reputation(established, low_evidence)
 
 
 @dataclass(frozen=True)

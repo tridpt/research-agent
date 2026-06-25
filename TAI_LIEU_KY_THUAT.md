@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (215 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (240 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -238,13 +238,30 @@ Windows. Mã thoát: 0 (OK), 2 (config), 3 (LLM), 4 (ghi file).
 - `FetchCache` — lưu nội dung theo URL ra file JSON (dùng lại giữa các phiên).
 - `CachingFetchTool` — bọc một `FetchTool`, phục vụ cache hit, lưu cache miss.
 
+### `prefetch.py` — Tải trước song song
+`select_prefetch_urls` (thuần) chọn các URL kết quả đáng tải trước (tôn trọng
+giới hạn per-domain, bỏ URL đã đọc/lỗi). `prefetch_urls` tải đồng thời bằng
+`ThreadPoolExecutor` để làm nóng cache → các lượt READ sau là cache hit, giảm
+thời gian phiên. Bật/tắt qua `--prefetch N`.
+
+### `llm_cache.py` — Cache phản hồi LLM (tùy chọn)
+`llm_cache_key` (thuần) băm (model, messages, tools). `LLMResponseCache` lưu
+quyết định/văn bản ra đĩa. `CachingLLMProvider` bọc một `LLMProvider`, phục vụ
+phản hồi đã cache cho prompt giống hệt (bật bằng `--cache-llm`; mặc định tắt).
+
+### `recency.py` — Nhận diện câu hỏi thời sự
+`wants_recency` (thuần) phát hiện từ khóa thời sự (Anh/Việt) hoặc năm gần đây;
+`recency_directive` trả về chỉ thị tin cậy hướng agent tới nguồn mới + công cụ
+`now`/`get_news`.
+
 ### `decision.py` — Phân giải quyết định
 `parse_decision(raw)` (thuần) — kiểm tra phản hồi LLM có đúng cấu trúc hành động
 không (đủ tham số bắt buộc), trả `AgentDecision` hoặc `InvalidDecision`.
 
 ### `tools.py` — Schema công cụ
 `TOOL_SCHEMAS` — đặc tả các công cụ (search/read/finish/calculate/now/
-get_weather/get_stock/read_pdf) ở định dạng function-calling chuẩn OpenAI/Gemini.
+get_weather/get_stock/get_wikipedia/arxiv_search/convert/get_news/get_github/
+read_pdf) ở định dạng function-calling chuẩn OpenAI/Gemini.
 
 ### `calculator.py` — Công cụ tính toán an toàn
 `calculate(expression)` — đánh giá biểu thức số học bằng AST với **allow-list**
@@ -282,12 +299,14 @@ Lấy metadata repo công khai (sao, ngôn ngữ, giấy phép, bản phát hàn
 GitHub REST API. `normalize_repo`, `parse_repo`, `parse_release`, `format_repo`
 là **hàm thuần**; chỉ `fetch_github` gọi HTTP.
 
-### `source_quality.py` — Xếp hạng độ tin cậy nguồn
+### `source_quality.py` — Xếp hạng độ tin cậy nguồn (mở rộng được)
 Heuristic minh bạch (không phải fact-check): `assess_source` chấm điểm theo loại
 domain — ưu tiên official `.gov`/`.edu`/`.int`, rồi tập nguồn uy tín đã tuyển
 chọn (hãng tin lớn, bách khoa, nhà xuất bản học thuật), trên web thường, dưới
 mạng xã hội — cộng với lượng bằng chứng trích xuất được. `rank_search_results`
-sắp xếp kết quả theo điểm.
+sắp xếp kết quả theo điểm. Có thể **mở rộng** danh sách uy tín bằng file JSON qua
+`load_reputation_file` / `configure_reputation_from_file` (`--reputation-file`),
+bổ sung lên trên các mặc định dựng sẵn.
 
 ### `memory.py` — Bộ nhớ dài hạn (`--memory`)
 Lưu nghiên cứu cũ (câu hỏi + tóm tắt + URL nguồn) ra file JSON. `tokenize`,
@@ -357,7 +376,9 @@ hiển thị.
 điểm chất lượng nguồn trung bình), `aggregate` tính trung bình một chế độ.
 `evaluate_modes` chạy nhiều chế độ trên cùng bộ câu hỏi, `compare_modes` +
 `format_comparison_markdown` dựng bảng so sánh. Có console script
-`research-agent-eval` để benchmark nhanh.
+`research-agent-eval` để benchmark nhanh. Ngoài chỉ số khách quan, có thêm
+`llm_quality_score` (+`parse_quality_judgement`) cho điểm chất lượng chủ quan do
+LLM chấm (0–10) khi cần.
 
 ### `errors.py` — Ngoại lệ
 `ResearchAgentError` (gốc), `ConfigError`, `ReportWriteError`, `LLMError`.
@@ -490,6 +511,8 @@ Biến môi trường (hoặc đặt qua `.env` / cờ CLI):
 | `RESEARCH_AGENT_CACHE_TTL` | 0 (vô hạn) | TTL cache (giây) |
 | `RESEARCH_AGENT_ROUND_DELAY` | 0 | Độ trễ giữa các vòng (giây) |
 | `RESEARCH_AGENT_STYLE` | standard | Độ dài báo cáo: brief / standard / deep |
+| `RESEARCH_AGENT_PREFETCH` | 3 | Số kết quả tải trước song song (0 = tắt) |
+| `RESEARCH_AGENT_REPUTATION_FILE` | — | File JSON bổ sung domain uy tín/kém |
 
 Thứ tự ưu tiên: **cờ CLI > biến môi trường > mặc định**.
 
@@ -519,7 +542,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-215 test, chia làm:
+240 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
@@ -528,13 +551,14 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
   `test_evaluate.py`, `test_stock.py`, `test_memory.py`, `test_pdf_export.py`,
   `test_source_quality.py`, `test_report_style.py`, `test_docx_export.py`,
   `test_wikipedia.py`, `test_arxiv.py`, `test_convert.py`, `test_news.py`,
-  `test_github.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_github.py`, `test_prefetch.py`, `test_llm_cache.py`, `test_recency.py`,
+  `test_reputation.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (215 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (240 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 

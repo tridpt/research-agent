@@ -11,14 +11,16 @@ from pathlib import Path
 
 from .agent import run_session
 from .cache import CachingFetchTool, FetchCache
-from .config import resolve_settings
+from .config import ENV_REPUTATION_FILE, resolve_settings
 from .errors import ConfigError, LLMError, ReportWriteError
 from .fetch_tool import FetchTool, HttpFetchTool
-from .llm import OpenAICompatibleProvider
+from .llm import LLMProvider, OpenAICompatibleProvider
+from .llm_cache import CachingLLMProvider, LLMResponseCache
 from .memory import MemoryStore, format_memory_directive
 from .models import Report
 from .multi_agent import run_multi_agent
 from .observability import make_emitter
+from .recency import recency_directive, wants_recency
 from .reflection import run_with_reflection
 from .render import render_markdown
 from .report_writer import write_report
@@ -30,6 +32,7 @@ from .search_tool import (
     SearchTool,
     TavilySearchTool,
 )
+from .source_quality import configure_reputation_from_file
 from .synthesizer import synthesize
 from .url_safety import public_http_url_error
 
@@ -92,6 +95,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["brief", "standard", "deep"],
         help="Report length/depth: brief, standard (default), or deep.",
     )
+    p.add_argument("--prefetch", type=int, dest="prefetch_count",
+                   help="Prefetch the top N search results concurrently (0 disables).")
+    p.add_argument("--cache-llm", action="store_true",
+                   help="Cache LLM responses on disk and reuse them for identical prompts.")
+    p.add_argument("--reputation-file", dest="reputation_file",
+                   help="JSON file of extra established/low-evidence domains for source ranking.")
     return p
 
 
@@ -99,7 +108,7 @@ def _cli_overrides(args: argparse.Namespace) -> Mapping[str, object]:
     keys = [
         "output_path", "verbose", "max_rounds", "max_sources", "max_seconds",
         "model", "provider", "min_domains", "max_per_domain", "cache_dir",
-        "pdf_paths", "report_style",
+        "pdf_paths", "report_style", "prefetch_count",
     ]
     return {k: getattr(args, k) for k in keys if getattr(args, k) is not None}
 
@@ -163,12 +172,25 @@ def main(argv: Sequence[str]) -> int:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 2
 
+    # Optional: augment source-credibility ranking from a reputation file.
+    reputation_file = getattr(args, "reputation_file", None) or os.environ.get(ENV_REPUTATION_FILE)
+    if reputation_file:
+        try:
+            configure_reputation_from_file(reputation_file)
+        except ValueError as exc:
+            print(f"Reputation file error: {exc}", file=sys.stderr)
+            return 2
+
     question = read_question(args, lambda: input("Research question: "))
 
     base_provider = OpenAICompatibleProvider(
         api_key=settings.api_key, base_url=settings.base_url, model=settings.model
     )
-    llm = RetryingLLMProvider(base_provider, max_attempts=settings.max_llm_attempts)
+    llm: LLMProvider = RetryingLLMProvider(base_provider, max_attempts=settings.max_llm_attempts)
+    # Optional: reuse LLM responses for identical prompts across runs/iterations.
+    if getattr(args, "cache_llm", False):
+        cache_root = settings.cache_dir or Path(".research_agent_cache")
+        llm = CachingLLMProvider(llm, LLMResponseCache(cache_root / "llm"), settings.model)
 
     # Build search (provider fallback) and fetch (cached unless --no-cache).
     search, fetch = _build_search_and_fetch(settings, use_cache=not getattr(args, "no_cache", False))
@@ -177,17 +199,21 @@ def main(argv: Sequence[str]) -> int:
     # Apply the configured report style to every synthesis path.
     synth_fn = partial(synthesize, style=settings.report_style)
 
-    # Long-term memory (opt-in): recall relevant past research as trusted
-    # background, and remember this run afterwards.
+    # Compose trusted directives: long-term memory recall + recency guidance.
+    directives: list[str] = []
     memory_store: MemoryStore | None = None
-    memory_directive: str | None = None
     if getattr(args, "memory", False):
         memory_path = Path(getattr(args, "memory_file", None) or ".research_agent_memory.json")
         memory_store = MemoryStore(memory_path)
         recalled = memory_store.recall(question)
-        memory_directive = format_memory_directive(recalled) or None
-        if memory_directive and settings.verbose:
-            print(f"Recalled {len(recalled)} related past result(s) from memory.", file=sys.stderr)
+        recalled_text = format_memory_directive(recalled)
+        if recalled_text:
+            directives.append(recalled_text)
+            if settings.verbose:
+                print(f"Recalled {len(recalled)} related past result(s) from memory.", file=sys.stderr)
+    if wants_recency(question):
+        directives.append(recency_directive())
+    memory_directive: str | None = "\n\n".join(directives) if directives else None
 
     try:
         if getattr(args, "multi_agent", False):

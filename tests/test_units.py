@@ -287,7 +287,9 @@ def test_run_session_collects_sources_and_synthesizes() -> None:
     )
     assert llm.decide_calls >= 1
     assert search.queries == ["topic"]
-    assert fetch.urls == ["https://a.com/x"]
+    # Prefetch may warm the cache with the same URL before the READ; with a real
+    # caching fetch tool the READ is then a cache hit (single network call).
+    assert "https://a.com/x" in fetch.urls
     assert report.sources and report.sources[0].url == "https://a.com/x"
 
 

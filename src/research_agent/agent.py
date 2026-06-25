@@ -38,6 +38,7 @@ from .models import (
     TransitionKind,
 )
 from .news import NewsError, fetch_news
+from .prefetch import prefetch_urls, select_prefetch_urls
 from .search_tool import SearchTool
 from .source_quality import assess_source
 from .stock import StockError, fetch_stock_quote
@@ -289,6 +290,19 @@ def run_session(
                         state.search_results.append(r)
                         known.add(r.url)
                 state.search_results.sort(key=lambda result: assess_source(result.url).score, reverse=True)
+                # Warm the cache: prefetch the top results concurrently so the
+                # agent's subsequent READ actions become instant cache hits.
+                prefetch_n = getattr(settings, "prefetch_count", 0) or 0
+                if prefetch_n > 0:
+                    to_warm = select_prefetch_urls(
+                        state.sources,
+                        state.search_results,
+                        settings.max_per_domain,
+                        prefetch_n,
+                        exclude_urls=state.failed_urls,
+                    )
+                    if to_warm:
+                        prefetch_urls(fetch, to_warm)
         elif decision.action is ActionType.READ:
             emit(_action_event(state, decision))
             target = decision.url or ""

@@ -75,6 +75,14 @@ reason about.
 ### Efficiency & quality
 - **Persistent fetch cache**: a URL read once is reused from disk across
   sessions (disable with `--no-cache`, configure with `--cache-dir`).
+- **Parallel prefetch**: after each search the agent warms the cache by
+  fetching the top results concurrently, so the subsequent READ actions are
+  instant cache hits (tune with `--prefetch N`, `0` disables).
+- **Optional LLM response cache**: with `--cache-llm`, identical prompts
+  (common across reflection iterations and re-runs) reuse a cached response.
+- **Recency awareness**: time-sensitive questions (e.g. "latest", a recent
+  year) automatically steer the agent toward fresh sources and the `now`/news
+  tools.
 - **Source diversity**: encourages at least `--min-domains` distinct domains and
   never collects more than `--max-per-domain` pages from one site. If the model
   tries to finish too early, the agent auto-reads one more new-domain source.
@@ -83,7 +91,8 @@ reason about.
   news, reference works, scholarly publishers), above the general web, and below
   social or user-generated platforms. Each fetched source is labeled by its
   domain type and the amount of extractable evidence. These labels are
-  transparent heuristics, not fact-checks.
+  transparent heuristics, not fact-checks. Extend the built-in lists with your
+  own domains via `--reputation-file` (or `RESEARCH_AGENT_REPUTATION_FILE`).
 - **Smart retry/backoff**: honors a provider `Retry-After` header on 429/503,
   otherwise uses capped exponential backoff.
 
@@ -197,7 +206,8 @@ search API instead, set `RESEARCH_AGENT_SEARCH_ENDPOINT` (and optionally
 Flags: `-o/--out`, `-v/--verbose`, `--max-rounds`, `--max-sources`,
 `--max-seconds`, `--min-domains`, `--max-per-domain`, `--cache-dir`,
 `--no-cache`, `--reflect`, `--reflect-iterations`, `--multi-agent`,
-`--memory`, `--memory-file`, `--style`, `--model`, `--provider`.
+`--memory`, `--memory-file`, `--style`, `--prefetch`, `--cache-llm`,
+`--reputation-file`, `--model`, `--provider`.
 
 Use `--style` to tune report length/depth: `brief` (short summary + bullets),
 `standard` (default), or `deep` (in-depth, sectioned analysis):
@@ -301,6 +311,9 @@ src/research_agent/
 ├── search_tool.py    # web search behind SearchTool (incl. DuckDuckGo)
 ├── fetch_tool.py     # download + extract behind FetchTool
 ├── cache.py          # persistent URL fetch cache + CachingFetchTool
+├── prefetch.py       # parallel cache-warming after a search
+├── llm_cache.py      # optional on-disk LLM response cache (--cache-llm)
+├── recency.py        # detect time-sensitive questions (pure)
 ├── memory.py         # long-term memory store across sessions (--memory)
 ├── llm.py            # LLMProvider protocol + OpenAI-compatible client
 ├── decision.py       # parse_decision (pure)

@@ -80,6 +80,9 @@ class Settings:
     allowed_pdf_paths: tuple[Path, ...] = ()
     # Report writing style: "brief" | "standard" | "deep".
     report_style: str = "standard"
+    # Number of top search results to prefetch concurrently after a search
+    # (warms the cache so later READs are instant). 0 disables prefetching.
+    prefetch_count: int = 3
 
 
 # --------------------------------------------------------------------------
