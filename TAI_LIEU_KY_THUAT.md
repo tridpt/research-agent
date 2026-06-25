@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (240 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (250 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -299,6 +299,17 @@ Lấy metadata repo công khai (sao, ngôn ngữ, giấy phép, bản phát hàn
 GitHub REST API. `normalize_repo`, `parse_repo`, `parse_release`, `format_repo`
 là **hàm thuần**; chỉ `fetch_github` gọi HTTP.
 
+### `weather.py` — Công cụ thời tiết
+`fetch_weather(location)` lấy thời tiết hiện tại từ wttr.in (không cần key); chỉ
+phần gọi HTTP, không có logic thuần phức tạp.
+
+### `tool_registry.py` — Sổ đăng ký công cụ info
+`InfoTool` mô tả khai báo một công cụ "một-tham-số → một Source" (tên, ActionType,
+trường tham số, schema, hàm `fetch`, loại lỗi). `INFO_TOOLS` liệt kê 6 công cụ
+(weather/stock/wikipedia/arxiv/news/github). Nhờ đó schema (`tools.py`), phân
+giải (`decision.py`) và dispatch (`agent.py`) được định nghĩa **một chỗ** thay vì
+lặp ở ba nơi.
+
 ### `source_quality.py` — Xếp hạng độ tin cậy nguồn (mở rộng được)
 Heuristic minh bạch (không phải fact-check): `assess_source` chấm điểm theo loại
 domain — ưu tiên official `.gov`/`.edu`/`.int`, rồi tập nguồn uy tín đã tuyển
@@ -542,7 +553,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-240 test, chia làm:
+250 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
@@ -552,25 +563,38 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
   `test_source_quality.py`, `test_report_style.py`, `test_docx_export.py`,
   `test_wikipedia.py`, `test_arxiv.py`, `test_convert.py`, `test_news.py`,
   `test_github.py`, `test_prefetch.py`, `test_llm_cache.py`, `test_recency.py`,
-  `test_reputation.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_reputation.py`, `test_tool_io.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (240 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (250 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 
 ## 14. Cách mở rộng
 
-### Thêm một công cụ mới cho agent (ví dụ: đọc PDF)
-1. Thêm schema vào `TOOL_SCHEMAS` trong `tools.py`.
+### Thêm một công cụ "info" một-tham-số (cách nhanh nhất)
+Với công cụ chỉ nhận một chuỗi và trả về một nguồn (như stock/wikipedia/news):
+1. Viết `fetch_X(arg, *, ...) -> (url, content)` trong một module mới, raise một
+   `XError` riêng.
+2. Thêm giá trị vào `ActionType` (`models.py`) + một trường tham số vào
+   `AgentDecision` nếu cần.
+3. Thêm một `InfoTool(...)` vào `INFO_TOOLS` trong `tool_registry.py`.
+4. (Tùy chọn) cập nhật `render_step_vi` trong `ui/app.py` để hiển thị tiếng Việt.
+5. Viết test (parser thuần + nhánh I/O bằng cách patch `httpx.get`).
+
+Schema, phân giải quyết định và dispatch được sinh **tự động** từ registry —
+không cần sửa `tools.py`, `decision.py`, hay `agent.py`.
+
+### Thêm một công cụ có hình dạng đặc biệt (ví dụ: đọc PDF)
+1. Thêm schema vào `CORE_TOOL_SCHEMAS` trong `tools.py`.
 2. Thêm giá trị vào `ActionType` (`models.py`) và xử lý trong `parse_decision`
    (`decision.py`).
 3. Thêm nhánh xử lý trong vòng lặp `run_session` (`agent.py`), lưu kết quả vào
    `state.tool_notes` hoặc `state.sources`.
-4. (Tùy chọn) cập nhật `render_step_vi` trong `ui/app.py` để hiển thị tiếng Việt.
+4. (Tùy chọn) cập nhật `render_step_vi` trong `ui/app.py`.
 5. Viết test.
 
 ### Thêm một search provider mới

@@ -4,13 +4,20 @@ These describe the agent's actions in the OpenAI / Gemini function-calling
 format (a list of ``{"type": "function", "function": {...}}`` specs). The model
 returns a structured ``tool_call`` instead of free-form JSON text, which is more
 reliable than JSON-mode prompting.
+
+The "core" tools (search/read/finish/calculate/now/convert/read_pdf) are defined
+explicitly here; the single-argument external info tools (weather, stock,
+Wikipedia, arXiv, news, GitHub) are generated from ``tool_registry`` so their
+schema, parsing, and dispatch stay defined in one place.
 """
 from __future__ import annotations
 
 from typing import Any
 
-# The canonical tool specifications advertised to the model.
-TOOL_SCHEMAS: list[dict[str, Any]] = [
+from .tool_registry import INFO_TOOLS
+
+# Tools with bespoke shapes or local (non-fetch) behavior.
+CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
@@ -114,124 +121,6 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "read_pdf",
-            "description": (
-                "Read one local PDF explicitly selected by the user. Only use an "
-                "exact path listed in the approved-PDF instruction."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "The absolute path to the local PDF file.",
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Why this PDF file is needed.",
-                    },
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get the current weather for a specific location.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "The city or location name to get weather for.",
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Why the weather data is needed.",
-                    },
-                },
-                "required": ["location"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_stock",
-            "description": (
-                "Get the latest available stock/index quote (price, daily range, "
-                "volume) for a ticker symbol. Use exchange suffixes when needed, "
-                "e.g. 'aapl.us', 'btc.v', '^spx'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "symbol": {
-                        "type": "string",
-                        "description": "The ticker symbol, e.g. 'aapl.us' or '^spx'.",
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Why the stock data is needed.",
-                    },
-                },
-                "required": ["symbol"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_wikipedia",
-            "description": (
-                "Look up an encyclopedic summary of a topic from Wikipedia. Good "
-                "for definitions, background, and well-established facts."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "The topic or article title to look up.",
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Why this Wikipedia lookup is needed.",
-                    },
-                },
-                "required": ["topic"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "arxiv_search",
-            "description": (
-                "Search arXiv for academic papers and read their abstracts. Use "
-                "for scientific, technical, or research-paper questions."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The topic or keywords to search arXiv for.",
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Why this paper search is needed.",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "convert",
             "description": (
                 "Convert between units or currencies, e.g. '100 USD to EUR', "
@@ -256,49 +145,29 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "get_news",
+            "name": "read_pdf",
             "description": (
-                "Find recent news/stories about a topic (via Hacker News). Use "
-                "for current events and trending tech discussions."
+                "Read one local PDF explicitly selected by the user. Only use an "
+                "exact path listed in the approved-PDF instruction."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {
+                    "path": {
                         "type": "string",
-                        "description": "The topic to find recent stories about.",
+                        "description": "The absolute path to the local PDF file.",
                     },
                     "reasoning": {
                         "type": "string",
-                        "description": "Why recent news is needed.",
+                        "description": "Why this PDF file is needed.",
                     },
                 },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_github",
-            "description": (
-                "Look up a GitHub repository's metadata (stars, language, "
-                "license, latest release). Use for software/library questions."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "repo": {
-                        "type": "string",
-                        "description": "Repository as 'owner/name' or a GitHub URL.",
-                    },
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Why this repository lookup is needed.",
-                    },
-                },
-                "required": ["repo"],
+                "required": ["path"],
             },
         },
     },
 ]
+
+# The canonical tool specifications advertised to the model: core tools plus the
+# registry-defined external info tools (weather, stock, Wikipedia, arXiv, ...).
+TOOL_SCHEMAS: list[dict[str, Any]] = CORE_TOOL_SCHEMAS + [tool.to_schema() for tool in INFO_TOOLS]

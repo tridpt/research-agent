@@ -461,7 +461,7 @@ def test_run_session_uses_weather_tool_as_a_source(monkeypatch) -> None:
         captured["headers"] = kwargs.get("headers")
         return WeatherResponse()
 
-    monkeypatch.setattr("research_agent.agent.httpx.get", fake_get)
+    monkeypatch.setattr("httpx.get", fake_get)
 
     def capturing_synth(_question, sources, _llm, _tool_notes):
         captured["sources"] = list(sources)

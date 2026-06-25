@@ -328,11 +328,13 @@ src/research_agent/
 ├── multi_agent.py    # planner/researcher/writer team (--multi-agent)
 ├── calculator.py     # safe AST arithmetic for the calculate tool
 ├── stock.py          # stock-quote tool (Yahoo Finance, no key)
+├── weather.py        # weather tool (wttr.in, no key)
 ├── wikipedia.py      # Wikipedia summary tool (MediaWiki API, no key)
 ├── arxiv.py          # arXiv paper-search tool (Atom API, no key)
 ├── convert.py        # unit + currency conversion tool (Frankfurter, no key)
 ├── news.py           # recent-news tool (Hacker News Algolia API, no key)
 ├── github.py         # GitHub repository lookup tool (REST API)
+├── tool_registry.py  # declarative registry of single-arg info tools
 ├── source_quality.py # explainable source-credibility ranking
 ├── evaluate.py       # deterministic metrics + cross-mode benchmark
 ├── tools.py          # native function-calling tool schemas

@@ -12,16 +12,13 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from urllib.parse import quote
 
-import httpx
 from pypdf import PdfReader
 
-from .arxiv import ArxivError, fetch_arxiv
 from .calculator import CalculatorError, calculate_str, now_str
 from .content import host_of, wrap_untrusted
 from .convert import ConvertError, convert
 from .decision import parse_decision
 from .fetch_tool import FetchTool
-from .github import GitHubError, fetch_github
 from .llm import LLMProvider, Message
 from .local_documents import approved_pdf_path
 from .models import (
@@ -37,13 +34,11 @@ from .models import (
     Transition,
     TransitionKind,
 )
-from .news import NewsError, fetch_news
 from .prefetch import prefetch_urls, select_prefetch_urls
 from .search_tool import SearchTool
 from .source_quality import assess_source
-from .stock import StockError, fetch_stock_quote
+from .tool_registry import INFO_TOOL_BY_ACTION
 from .tools import TOOL_SCHEMAS
-from .wikipedia import WikipediaError, fetch_wikipedia
 
 SYSTEM_PROMPT = (
     "You are an autonomous research agent. Your goal is to answer the user's "
@@ -386,65 +381,6 @@ def run_session(
                 )
             except Exception as exc:
                 emit(_error_event(state, f"read_pdf error: {exc}"))
-        elif decision.action is ActionType.GET_WEATHER:
-            emit(_action_event(state, decision))
-            try:
-                location = (decision.location or "").strip()
-                # Keep the result as a real source, not only a tool note.  The
-                # synthesizer intentionally refuses to write a report without
-                # sources, and the Streamlit normal-mode path only carries
-                # sources forward to its streaming synthesis step.
-                weather_url = f"https://wttr.in/{quote(location, safe='')}?format=3"
-                resp = httpx.get(
-                    weather_url,
-                    timeout=10.0,
-                    headers={"User-Agent": "research-agent/0.1"},
-                )
-                resp.raise_for_status()
-                note = f"Weather for '{location}': {resp.text.strip()}"
-                state.tool_notes.append(note)
-                state.sources.append(
-                    Source(url=weather_url, content=note, fetched_at=clock())
-                )
-            except Exception as exc:
-                emit(_error_event(state, f"get_weather error: {exc}"))
-        elif decision.action is ActionType.GET_STOCK:
-            emit(_action_event(state, decision))
-            try:
-                # Like weather, record the quote as a real source so the
-                # synthesizer can ground a numeric claim on it and FINISH.
-                stock_url, summary = fetch_stock_quote(decision.symbol or "")
-                note = f"Stock quote: {summary}"
-                state.tool_notes.append(note)
-                if not any(source.url == stock_url for source in state.sources):
-                    state.sources.append(
-                        Source(url=stock_url, content=note, fetched_at=clock())
-                    )
-            except StockError as exc:
-                emit(_error_event(state, f"get_stock error: {exc}"))
-        elif decision.action is ActionType.GET_WIKIPEDIA:
-            emit(_action_event(state, decision))
-            try:
-                wiki_url, content = fetch_wikipedia(
-                    decision.topic or "",
-                    max_chars=settings.per_source_char_limit,
-                )
-                if not any(source.url == wiki_url for source in state.sources):
-                    state.sources.append(
-                        Source(url=wiki_url, content=content, fetched_at=clock())
-                    )
-            except WikipediaError as exc:
-                emit(_error_event(state, f"get_wikipedia error: {exc}"))
-        elif decision.action is ActionType.ARXIV_SEARCH:
-            emit(_action_event(state, decision))
-            try:
-                arxiv_url, content = fetch_arxiv(decision.paper_query or "")
-                if not any(source.url == arxiv_url for source in state.sources):
-                    state.sources.append(
-                        Source(url=arxiv_url, content=content, fetched_at=clock())
-                    )
-            except ArxivError as exc:
-                emit(_error_event(state, f"arxiv_search error: {exc}"))
         elif decision.action is ActionType.CONVERT:
             emit(_action_event(state, decision))
             try:
@@ -452,26 +388,21 @@ def run_session(
                 state.tool_notes.append(f"convert({decision.conversion}) = {result}")
             except ConvertError as exc:
                 emit(_error_event(state, f"convert error: {exc}"))
-        elif decision.action is ActionType.GET_NEWS:
+        elif decision.action in INFO_TOOL_BY_ACTION:
+            # Single-argument external info tools (weather, stock, Wikipedia,
+            # arXiv, news, GitHub) all fetch a (url, content) pair recorded as a
+            # cited Source — dispatched uniformly via the registry.
             emit(_action_event(state, decision))
+            tool = INFO_TOOL_BY_ACTION[decision.action]
+            arg = getattr(decision, tool.arg_field) or ""
             try:
-                news_url, content = fetch_news(decision.news_query or "")
-                if not any(source.url == news_url for source in state.sources):
+                source_url, content = tool.fetch(arg, settings.per_source_char_limit)
+                if not any(source.url == source_url for source in state.sources):
                     state.sources.append(
-                        Source(url=news_url, content=content, fetched_at=clock())
+                        Source(url=source_url, content=content, fetched_at=clock())
                     )
-            except NewsError as exc:
-                emit(_error_event(state, f"get_news error: {exc}"))
-        elif decision.action is ActionType.GET_GITHUB:
-            emit(_action_event(state, decision))
-            try:
-                gh_url, content = fetch_github(decision.repo or "")
-                if not any(source.url == gh_url for source in state.sources):
-                    state.sources.append(
-                        Source(url=gh_url, content=content, fetched_at=clock())
-                    )
-            except GitHubError as exc:
-                emit(_error_event(state, f"get_github error: {exc}"))
+            except tool.error as exc:
+                emit(_error_event(state, f"{tool.name} error: {exc}"))
 
         state.rounds_used += 1
         emit(_round_event(state))
