@@ -42,6 +42,11 @@ python -m pip install -e ".[dev]"
 
 Lệnh này cài agent cùng mọi thư viện cần thiết. Chỉ cần làm một lần.
 
+> Không muốn cài Python? Nếu có Docker, chạy:
+> `docker build -t research-agent .` rồi
+> `docker run --rm -p 8501:8501 -e RESEARCH_AGENT_API_KEY=key-cua-ban research-agent`
+> và mở http://localhost:8501.
+
 ---
 
 ## 3. Lấy API key (miễn phí)

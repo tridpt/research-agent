@@ -1,0 +1,15 @@
+{
+  "_comment": "Extra source-reputation hints merged on top of the built-in lists. Use with --reputation-file or RESEARCH_AGENT_REPUTATION_FILE. Domains are matched on the host or any subdomain.",
+  "established": [
+    "ourworldindata.org",
+    "arxiv.org",
+    "acm.org",
+    "nature.com",
+    "mayoclinic.org",
+    "who.int"
+  ],
+  "low_evidence": [
+    "contentfarm.example",
+    "clickbait-news.example"
+  ]
+}

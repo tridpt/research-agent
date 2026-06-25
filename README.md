@@ -290,6 +290,23 @@ uv run pytest                           # tests
 CI verifies `uv.lock` and runs all four checks on Python 3.11-3.13 via GitHub
 Actions (`.github/workflows/ci.yml`).
 
+## Run with Docker
+
+Build the image and run the web UI (no local Python needed):
+
+```powershell
+docker build -t research-agent .
+docker run --rm -p 8501:8501 -e RESEARCH_AGENT_API_KEY=your-key research-agent
+```
+
+Then open http://localhost:8501. The image bundles a Unicode font so PDF export
+works. To run the CLI instead, override the command:
+
+```powershell
+docker run --rm -e RESEARCH_AGENT_API_KEY=your-key research-agent `
+  uv run --frozen research-agent "What are the tradeoffs of RAG vs fine-tuning?" -v
+```
+
 ## Build & distribute
 
 ```powershell
