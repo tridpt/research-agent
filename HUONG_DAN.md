@@ -158,6 +158,8 @@ bạn không cần bật gì:
 - **Chuyển đổi**: đổi đơn vị hoặc tiền tệ (vd `10 km to miles`, `100 USD to EUR`).
 - **Tin tức**: tìm tin/bài gần đây về một chủ đề (qua Hacker News).
 - **GitHub**: tra thông tin repo (sao, ngôn ngữ, giấy phép, bản phát hành mới nhất).
+- **Từ điển**: tra định nghĩa một từ tiếng Anh (không cần key).
+- **CrossRef**: tìm bài báo bình duyệt + DOI (bổ trợ arXiv, không cần key).
 - **Máy tính**: tính toán số học chính xác cho con số trong báo cáo.
 - **Ngày giờ**: lấy ngày giờ hiện tại cho câu hỏi kiểu "mới nhất", "hôm nay".
 - **Đọc PDF**: chỉ đọc đúng file PDF bạn chỉ định bằng `--pdf duongdan.pdf`.
