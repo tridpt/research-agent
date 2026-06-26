@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from .arxiv import ArxivError, fetch_arxiv
+from .crossref import CrossRefError, fetch_crossref
+from .dictionary import DictionaryError, fetch_definition
 from .github import GitHubError, fetch_github
 from .models import ActionType
 from .news import NewsError, fetch_news
@@ -137,6 +139,29 @@ INFO_TOOLS: tuple[InfoTool, ...] = (
         param_description="Repository as 'owner/name' or a GitHub URL.",
         fetch=lambda arg, _limit: fetch_github(arg),
         error=GitHubError,
+    ),
+    InfoTool(
+        name="get_dictionary",
+        action=ActionType.GET_DICTIONARY,
+        arg_field="word",
+        schema_param="word",
+        description="Look up the definition(s) and part of speech of an English word.",
+        param_description="The single English word to define.",
+        fetch=lambda arg, _limit: fetch_definition(arg),
+        error=DictionaryError,
+    ),
+    InfoTool(
+        name="crossref_search",
+        action=ActionType.CROSSREF_SEARCH,
+        arg_field="doi_query",
+        schema_param="query",
+        description=(
+            "Search CrossRef for peer-reviewed/scholarly works (title, authors, "
+            "year, DOI). Use for academic or citation-grade sources."
+        ),
+        param_description="The topic, title, or keywords to search CrossRef for.",
+        fetch=lambda arg, _limit: fetch_crossref(arg),
+        error=CrossRefError,
     ),
 )
 

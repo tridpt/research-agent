@@ -29,6 +29,8 @@ class ActionType(Enum):
     CONVERT = "convert"
     GET_NEWS = "get_news"
     GET_GITHUB = "get_github"
+    GET_DICTIONARY = "get_dictionary"
+    CROSSREF_SEARCH = "crossref_search"
 
 
 class TransitionKind(Enum):
@@ -120,6 +122,8 @@ class AgentDecision:
     conversion: str | None = None
     news_query: str | None = None
     repo: str | None = None
+    word: str | None = None
+    doi_query: str | None = None
 
 
 @dataclass(frozen=True)

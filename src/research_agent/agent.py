@@ -48,8 +48,9 @@ SYSTEM_PROMPT = (
     "quote for a ticker symbol. GET_WIKIPEDIA fetches an encyclopedic summary "
     "of a topic for definitions and background. ARXIV_SEARCH finds academic "
     "papers, CONVERT converts units/currencies, GET_NEWS finds recent stories, "
-    "and GET_GITHUB looks up a repository. READ_PDF is available only for "
-    "a PDF the user explicitly selected. "
+    "GET_GITHUB looks up a repository, GET_DICTIONARY defines an English word, "
+    "and CROSSREF_SEARCH finds peer-reviewed scholarly works. READ_PDF is "
+    "available only for a PDF the user explicitly selected. "
     "Use exactly one of the provided function tools for each decision. Do not "
     "reply with JSON text and never call a tool named JSON. "
     "Prefer to READ at least two or three DIFFERENT sources (distinct domains) "
@@ -524,6 +525,10 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["news_query"] = decision.news_query
     if decision.repo:
         detail["repo"] = decision.repo
+    if decision.word:
+        detail["word"] = decision.word
+    if decision.doi_query:
+        detail["doi_query"] = decision.doi_query
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,

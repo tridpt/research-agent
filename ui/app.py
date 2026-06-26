@@ -106,6 +106,12 @@ def render_step(event, lang: str = "vi") -> str:
         if action == "get_github":
             r = detail.get("repo", "")
             return (f"🐙 Đang tra GitHub: {r}" if vi else f"🐙 Looking up GitHub: {r}")
+        if action == "get_dictionary":
+            w = detail.get("word", "")
+            return (f"📖 Đang tra từ điển: {w}" if vi else f"📖 Looking up the dictionary: {w}")
+        if action == "crossref_search":
+            dq = detail.get("doi_query", "")
+            return (f"🔬 Đang tìm bài báo (CrossRef): {dq}" if vi else f"🔬 Searching CrossRef: {dq}")
         if action == "now":
             return ("🗓️ Đang lấy ngày giờ hiện tại" if vi else "🗓️ Getting the current date/time")
         if action == "plan":
