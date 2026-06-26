@@ -28,6 +28,7 @@ OpenAI-compatible LLM (Groq, Gemini, OpenAI, local Ollama).
 | [HUONG_DAN.md](HUONG_DAN.md) | Hướng dẫn sử dụng chi tiết cho người dùng (Tiếng Việt) |
 | [TAI_LIEU_KY_THUAT.md](TAI_LIEU_KY_THUAT.md) | Tài liệu kỹ thuật: kiến trúc, module, luồng dữ liệu (Tiếng Việt) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (conventions, tests) |
+| [CHANGELOG.md](CHANGELOG.md) | Notable changes per release |
 
 ## 📸 Screenshots
 
