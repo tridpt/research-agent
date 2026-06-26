@@ -22,6 +22,31 @@ class DocxExportError(RuntimeError):
 _HEADING_LEVEL = {"h1": 1, "h2": 2, "h3": 3}
 
 
+def _add_hyperlink(paragraph, url: str, text: str) -> None:
+    """Append a clickable hyperlink run (blue, underlined) to a paragraph."""
+    from docx.opc.constants import RELATIONSHIP_TYPE
+    from docx.oxml.ns import qn
+    from docx.oxml.shared import OxmlElement
+
+    r_id = paragraph.part.relate_to(url, RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+    run = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "1A6FDB")
+    rpr.append(color)
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    rpr.append(underline)
+    run.append(rpr)
+    text_el = OxmlElement("w:t")
+    text_el.text = text
+    run.append(text_el)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+
+
 def render_docx_bytes(title: str, markdown: str) -> bytes:
     """Render a Markdown report to DOCX bytes.
 
@@ -44,7 +69,14 @@ def render_docx_bytes(title: str, markdown: str) -> bytes:
         if level is not None:
             document.add_heading(block.text, level=level)
         elif block.kind == "bullet":
-            document.add_paragraph(block.text, style="List Bullet")
+            paragraph = document.add_paragraph(style="List Bullet")
+            if block.link:
+                _add_hyperlink(paragraph, block.link, block.text)
+            else:
+                paragraph.add_run(block.text)
+        elif block.link:
+            paragraph = document.add_paragraph()
+            _add_hyperlink(paragraph, block.link, block.text)
         else:
             document.add_paragraph(block.text)
 

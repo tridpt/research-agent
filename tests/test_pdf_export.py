@@ -21,10 +21,26 @@ def test_strip_inline_markdown_removes_syntax_keeps_text() -> None:
     assert strip_inline_markdown("**bold** and _italic_ and `code`") == "bold and italic and code"
 
 
-def test_strip_inline_markdown_keeps_link_text_and_url() -> None:
+def test_strip_inline_markdown_keeps_link_text() -> None:
     out = strip_inline_markdown("see [the docs](https://example.com/x)")
     assert "the docs" in out
-    assert "https://example.com/x" in out
+    # The URL is no longer inlined into the text (it becomes the block's link).
+    assert "(https://example.com/x)" not in out
+
+
+def test_extract_link_finds_markdown_and_bare_urls() -> None:
+    from research_agent.pdf_export import extract_link
+
+    assert extract_link("see [docs](https://example.com/x)") == "https://example.com/x"
+    assert extract_link("1. https://a.gov/report — Quality: high") == "https://a.gov/report"
+    assert extract_link("no link here") is None
+
+
+def test_markdown_to_blocks_attaches_link_to_source_lines() -> None:
+    blocks = markdown_to_blocks("## Sources\n\n1. [https://a.gov/x](https://a.gov/x) — Quality: high")
+    source_block = blocks[-1]
+    assert source_block.kind == "bullet"
+    assert source_block.link == "https://a.gov/x"
 
 
 def test_markdown_to_blocks_classifies_lines() -> None:
