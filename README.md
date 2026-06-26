@@ -290,7 +290,7 @@ uv run pytest                           # tests
 ```
 
 CI verifies `uv.lock` and runs all four checks on Python 3.11-3.13 via GitHub
-Actions (`.github/workflows/ci.yml`).
+Actions (`.github/workflows/ci.yml`), enforcing ≥80% test coverage.
 
 ## Run with Docker
 

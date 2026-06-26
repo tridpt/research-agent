@@ -52,5 +52,5 @@ jobs:
       - name: Type check (mypy)
         run: uv run --frozen mypy src
 
-      - name: Run tests (pytest + hypothesis)
-        run: uv run --frozen pytest
+      - name: Run tests (pytest + hypothesis) with coverage
+        run: uv run --frozen pytest --cov=research_agent --cov-report=term-missing --cov-fail-under=80

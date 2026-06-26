@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (277 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (279 test, gồm 10 property-based; CI ép coverage ≥ 80%)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -573,7 +573,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-277 test, chia làm:
+279 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
@@ -591,7 +591,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (277 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (279 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 

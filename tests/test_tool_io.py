@@ -11,6 +11,8 @@ import pytest
 
 from research_agent.arxiv import ArxivError, fetch_arxiv
 from research_agent.convert import ConvertError, convert, fetch_currency
+from research_agent.crossref import CrossRefError, fetch_crossref
+from research_agent.dictionary import DictionaryError, fetch_definition
 from research_agent.github import GitHubError, fetch_github
 from research_agent.news import NewsError, fetch_news
 from research_agent.stock import StockError, fetch_stock_quote
@@ -64,6 +66,16 @@ def _route(url: str) -> FakeResponse:
         }]})
     if "frankfurter" in url:
         return FakeResponse(json_data={"amount": 100.0, "base": "USD", "rates": {"EUR": 88.0}})
+    if "dictionaryapi.dev" in url:
+        return FakeResponse(json_data=[{
+            "word": "serendipity", "phonetic": "/x/",
+            "meanings": [{"partOfSpeech": "noun", "definitions": [{"definition": "A happy accident."}]}],
+        }])
+    if "api.crossref.org" in url:
+        return FakeResponse(json_data={"message": {"items": [{
+            "title": ["A Paper"], "author": [{"given": "A", "family": "B"}],
+            "issued": {"date-parts": [[2020]]}, "DOI": "10.1/x", "container-title": ["Journal"],
+        }]}})
     if url.endswith("/releases/latest"):
         return FakeResponse(json_data={"tag_name": "v1.0", "published_at": "2024-01-01T00:00:00Z"})
     if "api.github.com/repos/" in url:
@@ -122,6 +134,19 @@ def test_fetch_currency_via_convert(routed_httpx) -> None:
     assert fetch_currency(100.0, "usd", "eur") == 88.0
 
 
+def test_fetch_definition(routed_httpx) -> None:
+    url, content = fetch_definition("serendipity")
+    assert "wiktionary.org" in url
+    assert "Dictionary — serendipity" in content
+    assert "A happy accident." in content
+
+
+def test_fetch_crossref(routed_httpx) -> None:
+    url, content = fetch_crossref("a paper")
+    assert "doi.org/10.1/x" in url
+    assert "A Paper" in content
+
+
 def test_fetch_error_paths_raise_tool_errors(monkeypatch) -> None:
     def boom(url, **kw):
         raise httpx.ConnectError("no network")
@@ -141,6 +166,10 @@ def test_fetch_error_paths_raise_tool_errors(monkeypatch) -> None:
         fetch_github("o/r")
     with pytest.raises(ConvertError):
         fetch_currency(1.0, "usd", "eur")
+    with pytest.raises(DictionaryError):
+        fetch_definition("word")
+    with pytest.raises(CrossRefError):
+        fetch_crossref("q")
 
 
 def test_run_session_dispatches_registry_tool_as_source(routed_httpx) -> None:
