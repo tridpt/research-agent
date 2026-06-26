@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .models import ActionType, AgentDecision, InvalidDecision
-from .tool_registry import INFO_TOOL_BY_ACTION
+from .tool_registry import INFO_TOOL_BY_ACTION, NOTE_TOOL_BY_ACTION
 
 # A RawDecision is whatever the LLM provider hands back for an action choice:
 # typically a dict like {"action": "search", "query": "...", "reasoning": "..."}.
@@ -44,12 +44,6 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
             return InvalidDecision(reason="READ requires a non-empty 'url'")
         return AgentDecision(action=action, url=url.strip(), reasoning=reasoning)
 
-    if action is ActionType.CALCULATE:
-        expr = raw.get("expression")
-        if not isinstance(expr, str) or not expr.strip():
-            return InvalidDecision(reason="CALCULATE requires a non-empty 'expression'")
-        return AgentDecision(action=action, expression=expr.strip(), reasoning=reasoning)
-
     if action is ActionType.NOW:
         return AgentDecision(action=ActionType.NOW, reasoning=reasoning)
 
@@ -59,11 +53,17 @@ def parse_decision(raw: Any) -> AgentDecision | InvalidDecision:
             return InvalidDecision(reason="READ_PDF requires a non-empty 'path'")
         return AgentDecision(action=action, path=path.strip(), reasoning=reasoning)
 
-    if action is ActionType.CONVERT:
-        expr = raw.get("expression")
-        if not isinstance(expr, str) or not expr.strip():
-            return InvalidDecision(reason="CONVERT requires a non-empty 'expression'")
-        return AgentDecision(action=action, conversion=expr.strip(), reasoning=reasoning)
+    # Local note tools (calculate, convert) share one validation shape.
+    note_tool = NOTE_TOOL_BY_ACTION.get(action)
+    if note_tool is not None:
+        value = raw.get(note_tool.schema_param)
+        if not isinstance(value, str) or not value.strip():
+            return InvalidDecision(
+                reason=f"{note_tool.name.upper()} requires a non-empty '{note_tool.schema_param}'"
+            )
+        return AgentDecision(
+            action=action, reasoning=reasoning, **{note_tool.arg_field: value.strip()}
+        )
 
     # Single-argument external info tools (weather, stock, Wikipedia, arXiv,
     # news, GitHub) all share one validation shape, defined in the registry.

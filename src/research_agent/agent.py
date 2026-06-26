@@ -14,9 +14,8 @@ from urllib.parse import quote
 
 from pypdf import PdfReader
 
-from .calculator import CalculatorError, calculate_str, now_str
+from .calculator import now_str
 from .content import host_of, wrap_untrusted
-from .convert import ConvertError, convert
 from .decision import parse_decision
 from .fetch_tool import FetchTool
 from .llm import LLMProvider, Message
@@ -37,7 +36,7 @@ from .models import (
 from .prefetch import prefetch_urls, select_prefetch_urls
 from .search_tool import SearchTool
 from .source_quality import assess_source
-from .tool_registry import INFO_TOOL_BY_ACTION
+from .tool_registry import INFO_TOOL_BY_ACTION, NOTE_TOOL_BY_ACTION
 from .tools import TOOL_SCHEMAS
 
 SYSTEM_PROMPT = (
@@ -339,14 +338,15 @@ def run_session(
             else:
                 state.failed_urls.add(target)
                 emit(_error_event(state, fetch_outcome.error or "fetch error"))
-        elif decision.action is ActionType.CALCULATE:
+        elif decision.action in NOTE_TOOL_BY_ACTION:
+            # Local note tools (calculate, convert): compute a trusted note.
             emit(_action_event(state, decision))
+            note_tool = NOTE_TOOL_BY_ACTION[decision.action]
+            arg = getattr(decision, note_tool.arg_field) or ""
             try:
-                result = calculate_str(decision.expression or "")
-                note = f"calculate({decision.expression}) = {result}"
-                state.tool_notes.append(note)
-            except CalculatorError as exc:
-                emit(_error_event(state, f"calculate error: {exc}"))
+                state.tool_notes.append(note_tool.make_note(arg))
+            except note_tool.error as exc:
+                emit(_error_event(state, f"{note_tool.name} error: {exc}"))
         elif decision.action is ActionType.NOW:
             emit(_action_event(state, decision))
             state.tool_notes.append(f"current datetime = {now_str(clock)}")
@@ -382,13 +382,6 @@ def run_session(
                 )
             except Exception as exc:
                 emit(_error_event(state, f"read_pdf error: {exc}"))
-        elif decision.action is ActionType.CONVERT:
-            emit(_action_event(state, decision))
-            try:
-                result = convert(decision.conversion or "")
-                state.tool_notes.append(f"convert({decision.conversion}) = {result}")
-            except ConvertError as exc:
-                emit(_error_event(state, f"convert error: {exc}"))
         elif decision.action in INFO_TOOL_BY_ACTION:
             # Single-argument external info tools (weather, stock, Wikipedia,
             # arXiv, news, GitHub) all fetch a (url, content) pair recorded as a

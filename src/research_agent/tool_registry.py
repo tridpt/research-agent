@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from .arxiv import ArxivError, fetch_arxiv
+from .calculator import CalculatorError, calculate_str
+from .convert import ConvertError, convert
 from .crossref import CrossRefError, fetch_crossref
 from .dictionary import DictionaryError, fetch_definition
 from .github import GitHubError, fetch_github
@@ -167,3 +169,83 @@ INFO_TOOLS: tuple[InfoTool, ...] = (
 
 INFO_TOOL_BY_ACTION: dict[ActionType, InfoTool] = {tool.action: tool for tool in INFO_TOOLS}
 INFO_TOOL_BY_NAME: dict[str, InfoTool] = {tool.name: tool for tool in INFO_TOOLS}
+
+
+@dataclass(frozen=True)
+class NoteTool:
+    """A single-argument tool whose result is a trusted local note (not a source).
+
+    Used for the deterministic local helpers (calculator, unit/currency convert)
+    that contribute a fact to the agent's notes rather than a fetched source.
+    """
+
+    name: str
+    action: ActionType
+    arg_field: str
+    schema_param: str
+    description: str
+    param_description: str
+    compute: Callable[[str], str]   # returns the result string; raises ``error``
+    error: type[Exception]
+    note_format: str                # e.g. "calculate({arg}) = {result}"
+
+    def to_schema(self) -> dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        self.schema_param: {
+                            "type": "string",
+                            "description": self.param_description,
+                        },
+                        "reasoning": {
+                            "type": "string",
+                            "description": f"Why {self.name} is needed.",
+                        },
+                    },
+                    "required": [self.schema_param],
+                },
+            },
+        }
+
+    def make_note(self, arg: str) -> str:
+        """Compute the result and format the trusted note (may raise ``error``)."""
+        return self.note_format.format(arg=arg, result=self.compute(arg))
+
+
+NOTE_TOOLS: tuple[NoteTool, ...] = (
+    NoteTool(
+        name="calculate",
+        action=ActionType.CALCULATE,
+        arg_field="expression",
+        schema_param="expression",
+        description=(
+            "Evaluate a basic arithmetic expression (e.g. percentages, growth, "
+            "unit conversions) when the answer needs a precise number."
+        ),
+        param_description="Arithmetic expression, e.g. '(120-90)/90*100'.",
+        compute=calculate_str,
+        error=CalculatorError,
+        note_format="calculate({arg}) = {result}",
+    ),
+    NoteTool(
+        name="convert",
+        action=ActionType.CONVERT,
+        arg_field="conversion",
+        schema_param="expression",
+        description=(
+            "Convert between units or currencies, e.g. '100 USD to EUR', "
+            "'10 km to miles', '32 F to C'."
+        ),
+        param_description="Conversion like 'AMOUNT FROM to TO'.",
+        compute=convert,
+        error=ConvertError,
+        note_format="convert({arg}) = {result}",
+    ),
+)
+
+NOTE_TOOL_BY_ACTION: dict[ActionType, NoteTool] = {tool.action: tool for tool in NOTE_TOOLS}
