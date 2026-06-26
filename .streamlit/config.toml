@@ -1,0 +1,11 @@
+# Streamlit configuration (used locally and on Streamlit Community Cloud).
+[theme]
+base = "light"
+primaryColor = "#1a6fdb"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+# Cap uploaded PDF size (the app also enforces 20 MB in code).
+maxUploadSize = 25

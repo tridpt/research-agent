@@ -114,6 +114,8 @@ The agent chooses among these tools on each step via native function-calling:
 - **get_news** — find recent stories about a topic via Hacker News (no key).
 - **get_github** — look up a GitHub repository's metadata (stars, language,
   license, latest release).
+- **get_dictionary** — define an English word (dictionaryapi.dev, no key).
+- **crossref_search** — find peer-reviewed scholarly works via CrossRef (no key).
 - **read_pdf** — read a PDF explicitly selected by the user for the current run.
 - **finish** — stop and synthesize the cited report.
 
@@ -307,6 +309,21 @@ docker run --rm -e RESEARCH_AGENT_API_KEY=your-key research-agent `
   uv run --frozen research-agent "What are the tradeoffs of RAG vs fine-tuning?" -v
 ```
 
+## Deploy
+
+**Streamlit Community Cloud** (one-click hosted demo): push this repo to GitHub,
+create an app at https://streamlit.io/cloud pointing at `ui/app.py`. The bundled
+`requirements.txt` and `.streamlit/config.toml` are picked up automatically;
+users still supply their own API key in the sidebar.
+
+**PyPI**: pushing a `v*` tag triggers `.github/workflows/publish.yml`, which
+builds and publishes via PyPI Trusted Publishing (register the repo as a trusted
+publisher on PyPI first — no API token secret required). Build locally to check:
+
+```powershell
+uv build   # or: python -m build  → dist/*.whl and *.tar.gz
+```
+
 ## Build & distribute
 
 ```powershell
@@ -358,7 +375,9 @@ src/research_agent/
 ├── convert.py        # unit + currency conversion tool (Frankfurter, no key)
 ├── news.py           # recent-news tool (Hacker News Algolia API, no key)
 ├── github.py         # GitHub repository lookup tool (REST API)
-├── tool_registry.py  # declarative registry of single-arg info tools
+├── dictionary.py     # English dictionary tool (dictionaryapi.dev, no key)
+├── crossref.py       # scholarly-works tool (CrossRef REST API, no key)
+├── tool_registry.py  # declarative registry of single-arg info + note tools
 ├── source_quality.py # explainable source-credibility ranking
 ├── evaluate.py       # deterministic metrics + cross-mode benchmark
 ├── tools.py          # native function-calling tool schemas

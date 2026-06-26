@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (262 test, gồm 10 property-based)
+- **Kiểm thử:** `pytest` + `hypothesis` (277 test, gồm 10 property-based)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -308,12 +308,20 @@ là **hàm thuần**; chỉ `fetch_github` gọi HTTP.
 `fetch_weather(location)` lấy thời tiết hiện tại từ wttr.in (không cần key); chỉ
 phần gọi HTTP, không có logic thuần phức tạp.
 
-### `tool_registry.py` — Sổ đăng ký công cụ info
-`InfoTool` mô tả khai báo một công cụ "một-tham-số → một Source" (tên, ActionType,
-trường tham số, schema, hàm `fetch`, loại lỗi). `INFO_TOOLS` liệt kê 6 công cụ
-(weather/stock/wikipedia/arxiv/news/github). Nhờ đó schema (`tools.py`), phân
-giải (`decision.py`) và dispatch (`agent.py`) được định nghĩa **một chỗ** thay vì
-lặp ở ba nơi.
+### `dictionary.py` — Từ điển
+`fetch_definition(word)` lấy định nghĩa tiếng Anh qua dictionaryapi.dev (không
+cần key). `normalize_word`, `parse_dictionary`, `format_entry` là **hàm thuần**.
+
+### `crossref.py` — Bài báo học thuật (CrossRef)
+`fetch_crossref(query)` tìm công trình bình duyệt (tiêu đề, tác giả, năm, DOI) qua
+CrossRef REST. `parse_crossref`, `format_works` là **hàm thuần**; bổ trợ arXiv.
+
+### `tool_registry.py` — Sổ đăng ký công cụ
+`InfoTool` mô tả công cụ "một-tham-số → một Source"; `NoteTool` mô tả công cụ
+"một-tham-số → một note tin cậy" (calculate, convert). `INFO_TOOLS` (8 công cụ:
+weather/stock/wikipedia/arxiv/news/github/dictionary/crossref) và `NOTE_TOOLS`
+sinh schema (`tools.py`), phân giải (`decision.py`) và dispatch (`agent.py`) ở
+**một chỗ** thay vì lặp ở ba nơi.
 
 ### `source_quality.py` — Xếp hạng độ tin cậy nguồn (mở rộng được)
 Heuristic minh bạch (không phải fact-check): `assess_source` chấm điểm theo loại
@@ -335,7 +343,8 @@ cảnh **tin cậy**; sau phiên, kết quả được ghi nhớ.
 `markdown_to_blocks` / `strip_inline_markdown` phân tích Markdown thành block
 (thuần). `render_pdf_bytes` dựng PDF bằng `fpdf2` với font Unicode tự tìm trên
 máy (để tiếng Việt hiển thị đúng); nếu thiếu `fpdf2` hoặc font thì ném
-`PdfExportError` để nơi gọi quay về xuất Markdown/HTML.
+`PdfExportError` để nơi gọi quay về xuất Markdown/HTML. URL nguồn trở thành
+**link click được** (cả PDF lẫn DOCX).
 
 ### `docx_export.py` — Xuất Word (.docx)
 `render_docx_bytes` dùng lại `markdown_to_blocks` (thuần) rồi dựng tài liệu Word
@@ -427,7 +436,7 @@ classDiagram
 | `ResearchBudget` | max_rounds (8), max_sources (12), max_seconds (180) |
 | `SearchResult` | title, url, snippet |
 | `Source` | url, content, fetched_at |
-| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol, topic, paper_query, conversion, news_query, repo |
+| `AgentDecision` | action, reasoning, query, url, expression, path, location, symbol, topic, paper_query, conversion, news_query, repo, word, doi_query |
 | `Citation` | claim_ref, url |
 | `Report` | question, body_markdown, citations, sources, no_information |
 | `SessionState` | question, rounds_used, sources, search_results, search_history, failed_urls, tool_notes, ... |
@@ -464,6 +473,8 @@ Agent chọn 1 trong các công cụ mỗi bước qua **native function-calling
 | `convert` | expression | Đổi đơn vị/tiền tệ (vd '100 USD to EUR') |
 | `get_news` | query | Tìm tin gần đây (Hacker News, không cần key) |
 | `get_github` | repo | Tra metadata kho GitHub (REST API) |
+| `get_dictionary` | word | Định nghĩa một từ tiếng Anh (dictionaryapi.dev) |
+| `crossref_search` | query | Tìm bài báo bình duyệt qua CrossRef (REST) |
 | `read_pdf` | path | Đọc đúng PDF người dùng đã chỉ định cho phiên |
 | `finish` | — | Dừng và tổng hợp |
 
@@ -562,7 +573,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-262 test, chia làm:
+277 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
@@ -573,13 +584,14 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
   `test_wikipedia.py`, `test_arxiv.py`, `test_convert.py`, `test_news.py`,
   `test_github.py`, `test_prefetch.py`, `test_llm_cache.py`, `test_recency.py`,
   `test_reputation.py`, `test_tool_io.py`, `test_chat.py`, `test_progress.py`,
-  `test_ui_helpers.py`, `test_ui_i18n.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_ui_helpers.py`, `test_ui_i18n.py`, `test_dictionary.py`,
+  `test_crossref.py`): ví dụ/biên/lỗi cho từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (262 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (277 test) · Lint: `ruff check src tests` · Type: `mypy src`
 
 ---
 
