@@ -1,6 +1,8 @@
 # Streamlit configuration (used locally and on Streamlit Community Cloud).
+# Default to a dark theme. To switch at runtime use the ⋮ menu (top-right)
+# → Settings → Theme.
 [theme]
-base = "light"
+base = "dark"
 primaryColor = "#1a6fdb"
 
 [browser]
