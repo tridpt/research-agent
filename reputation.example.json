@@ -11,5 +11,10 @@
   "low_evidence": [
     "contentfarm.example",
     "clickbait-news.example"
-  ]
+  ],
+  "_weights_comment": "Optional per-domain score adjustments (points added on top of the category heuristic, clamped to [-100, 100] each and applied before the final 0-100 clamp). Positive nudges a domain up, negative down. Matches the host or any subdomain.",
+  "weights": {
+    "ourworldindata.org": 10,
+    "preprints.example": -15
+  }
 }

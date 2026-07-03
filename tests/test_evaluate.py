@@ -131,3 +131,64 @@ def test_llm_quality_score_uses_provider() -> None:
     judgement = llm_quality_score(report, _JudgeLLM('{"score": 7, "rationale": "ok"}'))
     assert judgement.score == 7
     assert judgement.rationale == "ok"
+
+
+# --------------------------------------------------------------------------
+# Runner wiring + CLI-style main() entry point
+# --------------------------------------------------------------------------
+def test_build_runners_selects_only_requested_known_modes() -> None:
+    from research_agent.config import ENV_API_KEY, resolve_settings
+    from research_agent.evaluate import _build_runners
+
+    from .fakes import FakeFetch, FakeSearch, ScriptedLLM
+
+    settings = resolve_settings(env={ENV_API_KEY: "k"}, cli_overrides={"max_rounds": 3})
+    runners = _build_runners(
+        settings,
+        ScriptedLLM(decisions=[{"action": "finish"}]),
+        FakeSearch(),
+        FakeFetch(),
+        modes=["normal", "unknown-mode"],
+    )
+    assert set(runners) == {"normal"}
+    # The wired runner produces a real Report end to end.
+    report = runners["normal"]("What is X?")
+    assert report.question == "What is X?"
+
+
+def test_main_reports_config_error_without_api_key(monkeypatch, capsys) -> None:
+    from research_agent import evaluate
+
+    monkeypatch.delenv("RESEARCH_AGENT_API_KEY", raising=False)
+    rc = evaluate.main(["--modes", "normal"])
+    assert rc == 2
+    assert "Configuration error" in capsys.readouterr().out
+
+
+def test_main_runs_normal_mode_and_prints_table(monkeypatch, capsys) -> None:
+    from research_agent import cli, evaluate
+    from research_agent.models import Citation, Report, Source
+
+    monkeypatch.setenv("RESEARCH_AGENT_API_KEY", "k")
+
+    def fake_build(settings, use_cache=True):
+        return object(), object()
+
+    monkeypatch.setattr(cli, "_build_search_and_fetch", fake_build)
+
+    def fake_runners(settings, llm, search, fetch, modes):
+        def run(q):
+            return Report(
+                question=q,
+                body_markdown="body",
+                citations=(Citation(claim_ref="c0", url="https://a.com"),),
+                sources=(Source(url="https://a.com", content="x", fetched_at=0.0),),
+            )
+        return {m: run for m in modes}
+
+    monkeypatch.setattr(evaluate, "_build_runners", fake_runners)
+    rc = evaluate.main(["--modes", "normal", "--questions", "Q1"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "| Mode |" in out
+    assert "normal" in out

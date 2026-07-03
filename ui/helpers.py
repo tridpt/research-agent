@@ -126,3 +126,23 @@ def parse_model_list(text: str, max_models: int = 4) -> list[str]:
         if len(models) >= max_models:
             break
     return models
+
+
+def secret_default(secrets: Any, env: dict[str, str], key: str, default: str = "") -> str:
+    """Resolve a config default across Streamlit secrets, env, and a fallback.
+
+    On Streamlit Community Cloud there is no ``.env`` file; a maintainer instead
+    configures values in the app's *Secrets* store, exposed as ``st.secrets``.
+    Precedence: ``st.secrets[key]`` > ``env[key]`` > ``default``. ``secrets`` may
+    be any Mapping-like object (or None); missing keys never raise.
+    """
+    if secrets is not None:
+        try:
+            if key in secrets:
+                value = secrets[key]
+                if value:
+                    return str(value)
+        except (TypeError, KeyError, FileNotFoundError):
+            # st.secrets raises if no secrets file exists; treat as "not set".
+            pass
+    return env.get(key, "") or default

@@ -6,6 +6,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Per-domain reputation weights**: a reputation file may now include a
+  `weights` map (e.g. `{"my-lab.example": 15, "spam.example": -30}`) that nudges
+  a domain's source-quality score up or down on top of the category heuristics,
+  matching a host or any of its subdomains (`--reputation-file`).
+- **Streamlit Cloud secrets**: the web UI now reads its default provider
+  configuration (API key, base URL, model) from `st.secrets` when deployed on
+  Streamlit Community Cloud, enabling a one-click hosted demo. Precedence is
+  secrets > environment > saved `.env`.
+
+### Tests
+
+- Raised total coverage from 83% to 93% with focused tests for the CLI wiring,
+  the OpenAI-compatible LLM client (HTTP/retry/recovery/streaming paths), the
+  search providers and fallback, the HTTP fetch tool (redirects, blocking, SSRF
+  guards), and the evaluation `main`/runner wiring.
+
 ## [0.1.0] - 2026-06-26
 
 First public release: an autonomous CLI/Web research agent that searches the

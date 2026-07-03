@@ -72,6 +72,11 @@ def _host_matches(host: str, domains: frozenset[str] | set[str]) -> bool:
     return any(host == domain or host.endswith("." + domain) for domain in domains)
 
 
+# Per-domain score adjustments (points added/subtracted) loaded from a
+# reputation file's optional ``weights`` map. Empty by default; a positive value
+# nudges a domain up, a negative value down, on top of the category heuristics.
+_DOMAIN_WEIGHTS: dict[str, int] = {}
+
 # Snapshots of the built-in defaults so a loaded reputation file augments rather
 # than replaces them, and so ``reset_reputation`` can restore them.
 _DEFAULT_ESTABLISHED_HOSTS = frozenset(_ESTABLISHED_HOSTS)
@@ -85,29 +90,71 @@ def _clean_hosts(values: object) -> set[str]:
     return {str(v).strip().lower().lstrip(".") for v in values if str(v).strip()}
 
 
-def apply_reputation(established: set[str] | None = None, low_evidence: set[str] | None = None) -> None:
+def _clean_weights(value: object) -> dict[str, int]:
+    """Pure: normalize a {domain: points} map into lowercase host -> int.
+
+    Non-numeric or unparseable values are skipped; each weight is clamped to
+    [-100, 100] so a single domain can never dominate the 0-100 score scale.
+    """
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, int] = {}
+    for raw_host, raw_points in value.items():
+        host = str(raw_host).strip().lower().lstrip(".")
+        if not host:
+            continue
+        try:
+            points = int(raw_points)
+        except (TypeError, ValueError):
+            continue
+        cleaned[host] = max(-100, min(100, points))
+    return cleaned
+
+
+def apply_reputation(
+    established: set[str] | None = None,
+    low_evidence: set[str] | None = None,
+    weights: dict[str, int] | None = None,
+) -> None:
     """Augment the built-in reputation lists with extra domains (configuration).
 
     Passing a set adds those domains on top of the built-in defaults; the change
-    affects subsequent ``assess_source`` calls.
+    affects subsequent ``assess_source`` calls. ``weights`` sets per-domain score
+    adjustments (points added on top of the category heuristic) and replaces any
+    previously applied weights.
     """
-    global _ESTABLISHED_HOSTS, _LOW_EVIDENCE_HOSTS
+    global _ESTABLISHED_HOSTS, _LOW_EVIDENCE_HOSTS, _DOMAIN_WEIGHTS
     _ESTABLISHED_HOSTS = set(_DEFAULT_ESTABLISHED_HOSTS) | (established or set())
     _LOW_EVIDENCE_HOSTS = set(_DEFAULT_LOW_EVIDENCE_HOSTS) | (low_evidence or set())
+    _DOMAIN_WEIGHTS = dict(weights or {})
 
 
 def reset_reputation() -> None:
     """Restore the built-in reputation lists (used by tests)."""
-    global _ESTABLISHED_HOSTS, _LOW_EVIDENCE_HOSTS
+    global _ESTABLISHED_HOSTS, _LOW_EVIDENCE_HOSTS, _DOMAIN_WEIGHTS
     _ESTABLISHED_HOSTS = set(_DEFAULT_ESTABLISHED_HOSTS)
     _LOW_EVIDENCE_HOSTS = set(_DEFAULT_LOW_EVIDENCE_HOSTS)
+    _DOMAIN_WEIGHTS = {}
 
 
-def load_reputation_file(path: str | Path) -> tuple[set[str], set[str]]:
-    """Read a JSON reputation file -> (established, low_evidence) domain sets.
+def _weight_for(host: str) -> tuple[int, str | None]:
+    """Pure: the configured score adjustment for ``host`` (0 if none).
+
+    Matches an exact host or any parent domain (so a weight on ``example.com``
+    also applies to ``blog.example.com``). Returns ``(points, matched_domain)``.
+    """
+    for domain, points in _DOMAIN_WEIGHTS.items():
+        if host == domain or host.endswith("." + domain):
+            return points, domain
+    return 0, None
+
+
+def load_reputation_file(path: str | Path) -> tuple[set[str], set[str], dict[str, int]]:
+    """Read a JSON reputation file -> (established, low_evidence, weights).
 
     Expected shape: {"established": ["reuters.com", ...],
-                     "low_evidence": ["example-forum.com", ...]}.
+                     "low_evidence": ["example-forum.com", ...],
+                     "weights": {"my-lab.example": 15, "spam.example": -30}}.
     Raises ValueError if the file is missing or malformed.
     """
     try:
@@ -116,13 +163,17 @@ def load_reputation_file(path: str | Path) -> tuple[set[str], set[str]]:
         raise ValueError(f"could not read reputation file {path}: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("reputation file must be a JSON object")
-    return _clean_hosts(data.get("established")), _clean_hosts(data.get("low_evidence"))
+    return (
+        _clean_hosts(data.get("established")),
+        _clean_hosts(data.get("low_evidence")),
+        _clean_weights(data.get("weights")),
+    )
 
 
 def configure_reputation_from_file(path: str | Path) -> None:
     """Load a reputation file and apply it (raises ValueError on failure)."""
-    established, low_evidence = load_reputation_file(path)
-    apply_reputation(established, low_evidence)
+    established, low_evidence, weights = load_reputation_file(path)
+    apply_reputation(established, low_evidence, weights)
 
 
 @dataclass(frozen=True)
@@ -180,6 +231,13 @@ def assess_source(url: str, content: str | None = None) -> SourceQuality:
         elif evidence_chars >= 600:
             score += 10
             reasons.append("substantial extracted evidence")
+
+    # Apply any user-configured per-domain weight on top of the heuristics.
+    weight, matched = _weight_for(host)
+    if weight:
+        score += weight
+        sign = "+" if weight > 0 else ""
+        reasons.append(f"custom reputation weight ({sign}{weight} for {matched})")
 
     score = max(0, min(100, score))
     label = "high" if score >= 75 else "medium" if score >= 50 else "low"

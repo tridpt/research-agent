@@ -50,9 +50,10 @@ def test_load_reputation_file_roundtrip(tmp_path: Path) -> None:
         json.dumps({"established": ["Good.Example"], "low_evidence": ["Bad.Example"]}),
         encoding="utf-8",
     )
-    established, low = load_reputation_file(path)
+    established, low, weights = load_reputation_file(path)
     assert "good.example" in established  # normalized to lowercase
     assert "bad.example" in low
+    assert weights == {}
 
 
 def test_configure_reputation_from_file_applies(tmp_path: Path) -> None:
@@ -65,3 +66,57 @@ def test_configure_reputation_from_file_applies(tmp_path: Path) -> None:
 def test_load_reputation_file_missing_raises() -> None:
     with pytest.raises(ValueError):
         load_reputation_file("does-not-exist-12345.json")
+
+
+# --------------------------------------------------------------------------
+# Per-domain reputation weights
+# --------------------------------------------------------------------------
+def test_weights_boost_a_domain_score() -> None:
+    baseline = assess_source("https://tuned-lab.example/paper").score
+    apply_reputation(weights={"tuned-lab.example": 25})
+    boosted = assess_source("https://tuned-lab.example/paper").score
+    assert boosted == baseline + 25
+    assert "reputation weight" in assess_source("https://tuned-lab.example/paper").reason
+
+
+def test_weights_penalize_a_domain_score() -> None:
+    baseline = assess_source("https://meh-site.example/post").score
+    apply_reputation(weights={"meh-site.example": -20})
+    lowered = assess_source("https://meh-site.example/post").score
+    assert lowered == baseline - 20
+
+
+def test_weights_apply_to_subdomains() -> None:
+    apply_reputation(weights={"lab.example": 15})
+    q = assess_source("https://blog.lab.example/post")
+    assert "reputation weight" in q.reason
+
+
+def test_weights_clamp_final_score_within_bounds() -> None:
+    # A huge positive weight can't push the final score above 100.
+    apply_reputation(weights={"cap.example": 100})
+    assert assess_source("https://cap.example/x", "evidence " * 200).score == 100
+
+
+def test_load_reputation_file_reads_weights(tmp_path: Path) -> None:
+    path = tmp_path / "rep.json"
+    path.write_text(
+        json.dumps({"weights": {"A.Example": 10, "bad": "not-an-int", "": 5}}),
+        encoding="utf-8",
+    )
+    _established, _low, weights = load_reputation_file(path)
+    assert weights == {"a.example": 10}  # normalized, invalid/empty entries dropped
+
+
+def test_configure_reputation_from_file_applies_weights(tmp_path: Path) -> None:
+    path = tmp_path / "rep.json"
+    path.write_text(json.dumps({"weights": {"weighted-lab.example": 30}}), encoding="utf-8")
+    configure_reputation_from_file(path)
+    assert "reputation weight" in assess_source("https://weighted-lab.example/x").reason
+
+
+def test_weights_clamped_when_loaded(tmp_path: Path) -> None:
+    path = tmp_path / "rep.json"
+    path.write_text(json.dumps({"weights": {"x.example": 9999}}), encoding="utf-8")
+    _e, _l, weights = load_reputation_file(path)
+    assert weights["x.example"] == 100

@@ -33,6 +33,7 @@ from helpers import (  # noqa: E402
     parse_model_list,
     report_to_html,
     save_history,
+    secret_default,
 )
 from i18n import t  # noqa: E402
 
@@ -188,7 +189,13 @@ _SAVED = load_env_file()
 
 
 def _initial(key: str, default: str = "") -> str:
-    return _SAVED.get(key) or os.environ.get(key, "") or default
+    # Precedence: saved .env > Streamlit secrets (Cloud) > process env > default.
+    # st.secrets lets a maintainer pre-configure a one-click hosted demo without
+    # a .env file; users can still override any value in the sidebar.
+    saved = _SAVED.get(key)
+    if saved:
+        return saved
+    return secret_default(getattr(st, "secrets", None), dict(os.environ), key, default)
 
 
 # Load persistent history once into session state.

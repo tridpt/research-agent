@@ -93,7 +93,10 @@ reason about.
   social or user-generated platforms. Each fetched source is labeled by its
   domain type and the amount of extractable evidence. These labels are
   transparent heuristics, not fact-checks. Extend the built-in lists with your
-  own domains via `--reputation-file` (or `RESEARCH_AGENT_REPUTATION_FILE`).
+  own domains via `--reputation-file` (or `RESEARCH_AGENT_REPUTATION_FILE`),
+  including a `weights` map for fine-grained per-domain score adjustments
+  (e.g. `{"my-lab.example": 15, "spam.example": -30}`) applied on top of the
+  category heuristics (see `reputation.example.json`).
 - **Smart retry/backoff**: honors a provider `Retry-After` header on 429/503,
   otherwise uses capped exponential backoff.
 
@@ -314,8 +317,16 @@ docker run --rm -e RESEARCH_AGENT_API_KEY=your-key research-agent `
 
 **Streamlit Community Cloud** (one-click hosted demo): push this repo to GitHub,
 create an app at https://streamlit.io/cloud pointing at `ui/app.py`. The bundled
-`requirements.txt` and `.streamlit/config.toml` are picked up automatically;
-users still supply their own API key in the sidebar.
+`requirements.txt` and `.streamlit/config.toml` are picked up automatically.
+Visitors can supply their own API key in the sidebar, or a maintainer can
+pre-fill the demo by adding secrets in the app's **Settings → Secrets** (they
+take precedence over the sidebar defaults):
+
+```toml
+RESEARCH_AGENT_API_KEY = "gsk_...your key..."
+RESEARCH_AGENT_BASE_URL = "https://api.groq.com/openai/v1"
+RESEARCH_AGENT_MODEL = "openai/gpt-oss-20b"
+```
 
 **PyPI**: pushing a `v*` tag triggers `.github/workflows/publish.yml`, which
 builds and publishes via PyPI Trusted Publishing (register the repo as a trusted
@@ -396,8 +407,10 @@ Ideas for future versions (contributions welcome — see [CONTRIBUTING.md](CONTR
 - [x] Direct PDF export (`-o report.pdf`, or the UI's PDF button)
 - [x] Side-by-side model comparison in the web UI
 - [x] Automated quality evaluation across modes (`research-agent-eval`)
-- [ ] Streamlit Community Cloud deployment for a one-click live demo
-- [ ] Source-credibility ranking tuned with per-domain reputation data
+- [x] Streamlit Community Cloud deployment for a one-click live demo
+      (reads the API key from `st.secrets`; see Deploy)
+- [x] Source-credibility ranking tuned with per-domain reputation data
+      (`weights` map in `--reputation-file`)
 
 ## License
 
