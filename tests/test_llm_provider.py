@@ -246,3 +246,104 @@ def test_generate_stream_fatal_status_raises() -> None:
     p = _stream_provider(_FakeStreamResponse([], status_code=400, body=b"bad request"))
     with pytest.raises(LLMError):
         list(p.generate_stream([Message(role="user", content="hi")]))
+
+
+def test_generate_stream_records_usage_and_skips_noise() -> None:
+    """Usage blocks accumulate; malformed JSON and empty choices are skipped."""
+    from research_agent.usage import UsageTracker
+
+    tracker = UsageTracker()
+    lines = [
+        "ignored non-data line",
+        "data: not-json",  # malformed -> skipped
+        'data: {"choices": []}',  # no choices -> skipped
+        'data: {"choices": [{"delta": {}}]}',  # no content piece -> skipped
+        'data: {"choices": [{"delta": {"content": "hi"}}], '
+        '"usage": {"prompt_tokens": 3, "completion_tokens": 5}}',
+        "data: [DONE]",
+        'data: {"choices": [{"delta": {"content": "after done"}}]}',  # never reached
+    ]
+    p = OpenAICompatibleProvider(api_key="k", base_url="https://x/v1", model="m", usage=tracker)
+    p._client = _StreamClient(_FakeStreamResponse(lines))
+
+    assert "".join(p.generate_stream([Message(role="user", content="hi")])) == "hi"
+    assert tracker.prompt_tokens == 3
+    assert tracker.completion_tokens == 5
+
+
+def test_generate_stream_transient_uses_body_hint_when_no_header() -> None:
+    p = _stream_provider(
+        _FakeStreamResponse([], status_code=503, body=b"Please retry in 6s")
+    )
+    with pytest.raises(TransientLLMError) as exc:
+        list(p.generate_stream([Message(role="user", content="hi")]))
+    assert exc.value.retry_after == 6.0
+
+
+def test_generate_stream_timeout_becomes_transient_error() -> None:
+    p = _stream_provider(httpx.TimeoutException("slow"))
+    with pytest.raises(TransientLLMError):
+        list(p.generate_stream([Message(role="user", content="hi")]))
+
+
+def test_generate_stream_connection_error_becomes_transient_error() -> None:
+    p = _stream_provider(httpx.ConnectError("down"))
+    with pytest.raises(TransientLLMError):
+        list(p.generate_stream([Message(role="user", content="hi")]))
+
+
+# --------------------------------------------------------------------------
+# Recovery-helper branch coverage (_decision_from_obj / _recover_from_obj)
+# --------------------------------------------------------------------------
+def test_decision_from_obj_direct_action() -> None:
+    from research_agent.llm import _decision_from_obj
+
+    assert _decision_from_obj({"action": "finish"}) == {"action": "finish"}
+
+
+def test_decision_from_obj_wrapped_arguments_string() -> None:
+    from research_agent.llm import _decision_from_obj
+
+    obj = {"name": "search", "arguments": '{"query": "cats"}'}
+    assert _decision_from_obj(obj) == {"action": "search", "query": "cats"}
+
+
+def test_decision_from_obj_wrapped_arguments_with_bad_json_uses_name() -> None:
+    from research_agent.llm import _decision_from_obj
+
+    # Unparseable arguments string falls back to {} but the known name still maps.
+    obj = {"name": "finish", "arguments": "{not-json"}
+    assert _decision_from_obj(obj) == {"action": "finish"}
+
+
+def test_decision_from_obj_arguments_carry_action() -> None:
+    from research_agent.llm import _decision_from_obj
+
+    obj = {"name": "JSON", "arguments": {"action": "read", "url": "https://a.com"}}
+    assert _decision_from_obj(obj) == {"action": "read", "url": "https://a.com"}
+
+
+def test_decision_from_obj_unknown_name_returns_none() -> None:
+    from research_agent.llm import _decision_from_obj
+
+    assert _decision_from_obj({"name": "unknown", "arguments": {"x": 1}}) is None
+    assert _decision_from_obj("not a dict") is None
+
+
+def test_recover_from_obj_error_wrapper_with_function_text() -> None:
+    from research_agent.llm import _recover_from_obj
+
+    obj = {"error": {"failed_generation": '<function=read{"url": "https://a.com"}>'}}
+    assert _recover_from_obj(obj) == {"action": "read", "url": "https://a.com"}
+
+
+def test_recover_from_obj_non_dict_returns_none() -> None:
+    from research_agent.llm import _recover_from_obj
+
+    assert _recover_from_obj([1, 2, 3]) is None
+
+
+def test_recover_scans_embedded_json_after_error_prefix() -> None:
+    # A provider error prefix before an embedded decision object is tolerated.
+    text = 'LLM HTTP 400: some noise {"action": "search", "query": "z"} trailing'
+    assert _recover_from_failed_generation(text) == {"action": "search", "query": "z"}

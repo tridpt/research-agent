@@ -176,6 +176,21 @@ def configure_reputation_from_file(path: str | Path) -> None:
     apply_reputation(established, low_evidence, weights)
 
 
+def configure_reputation_from_mapping(data: object) -> None:
+    """Apply reputation from an already-parsed mapping (e.g. from the UI).
+
+    ``data`` should be a dict with optional ``established``/``low_evidence``
+    lists and a ``weights`` map. Raises ValueError if it is not a JSON object.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("reputation data must be a JSON object")
+    apply_reputation(
+        _clean_hosts(data.get("established")),
+        _clean_hosts(data.get("low_evidence")),
+        _clean_weights(data.get("weights")),
+    )
+
+
 @dataclass(frozen=True)
 class SourceQuality:
     """An explainable quality estimate for one URL and its extracted content."""

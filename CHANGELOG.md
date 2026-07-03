@@ -6,12 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-03
+
 ### Added
 
 - **Per-domain reputation weights**: a reputation file may now include a
   `weights` map (e.g. `{"my-lab.example": 15, "spam.example": -30}`) that nudges
   a domain's source-quality score up or down on top of the category heuristics,
   matching a host or any of its subdomains (`--reputation-file`).
+- **Reputation in the web UI**: the sidebar has a Source-reputation field to
+  paste the same JSON (established/low_evidence/weights), applied for the run.
 - **Streamlit Cloud secrets**: the web UI now reads its default provider
   configuration (API key, base URL, model) from `st.secrets` when deployed on
   Streamlit Community Cloud, enabling a one-click hosted demo. Precedence is
@@ -65,5 +69,6 @@ report. Works with any OpenAI-compatible LLM (Groq, Gemini, OpenAI, Ollama).
   workflow (Trusted Publishing), and CI on Python 3.11-3.13 enforcing lint,
   type-checks, and ≥80% test coverage.
 
-[Unreleased]: https://github.com/tridpt/research-agent/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/tridpt/research-agent/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/tridpt/research-agent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tridpt/research-agent/releases/tag/v0.1.0

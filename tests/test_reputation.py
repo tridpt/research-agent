@@ -10,6 +10,7 @@ from research_agent.source_quality import (
     apply_reputation,
     assess_source,
     configure_reputation_from_file,
+    configure_reputation_from_mapping,
     load_reputation_file,
     reset_reputation,
 )
@@ -120,3 +121,27 @@ def test_weights_clamped_when_loaded(tmp_path: Path) -> None:
     path.write_text(json.dumps({"weights": {"x.example": 9999}}), encoding="utf-8")
     _e, _l, weights = load_reputation_file(path)
     assert weights["x.example"] == 100
+
+
+# --------------------------------------------------------------------------
+# Applying reputation from an already-parsed mapping (used by the Streamlit UI)
+# --------------------------------------------------------------------------
+def test_configure_reputation_from_mapping_applies_lists_and_weights() -> None:
+    configure_reputation_from_mapping(
+        {
+            "established": ["ui-lab.example"],
+            "low_evidence": ["ui-spam.example"],
+            "weights": {"ui-boost.example": 20},
+        }
+    )
+    assert "established" in assess_source("https://ui-lab.example/x").reason
+    assert "social" in assess_source("https://ui-spam.example/x").reason
+
+    base = assess_source("https://plain.example/x").score
+    boosted = assess_source("https://ui-boost.example/x").score
+    assert boosted == base + 20
+
+
+def test_configure_reputation_from_mapping_rejects_non_dict() -> None:
+    with pytest.raises(ValueError):
+        configure_reputation_from_mapping(["not", "a", "dict"])

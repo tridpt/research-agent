@@ -84,6 +84,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "vi": "Để trống thì dùng DuckDuckGo miễn phí.",
         "en": "Leave empty to use free DuckDuckGo search.",
     },
+    "reputation_label": {"vi": "Uy tín nguồn (tùy chọn)", "en": "Source reputation (optional)"},
+    "reputation_help": {
+        "vi": "Tinh chỉnh xếp hạng nguồn theo tên miền của bạn. Dán JSON: "
+              '{"established": [...], "low_evidence": [...], "weights": {"miền": điểm}}.',
+        "en": "Tune source ranking with your own domains. Paste JSON: "
+              '{"established": [...], "low_evidence": [...], "weights": {"domain": points}}.',
+    },
+    "reputation_err": {
+        "vi": "JSON uy tín nguồn không hợp lệ — bỏ qua: {err}",
+        "en": "Invalid source-reputation JSON — ignored: {err}",
+    },
+    "reputation_ok": {
+        "vi": "Đã áp dụng uy tín nguồn tùy chỉnh.",
+        "en": "Applied custom source reputation.",
+    },
     "pdf_label": {"vi": "PDF cho phép agent đọc (tùy chọn)", "en": "PDF the agent may read (optional)"},
     "pdf_help": {
         "vi": "Chỉ dùng cho lượt chạy này, tối đa 20 MB; file sẽ bị xóa ngay sau đó.",

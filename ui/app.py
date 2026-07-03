@@ -10,6 +10,7 @@ history, and HTML/Markdown export.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -58,6 +59,7 @@ from research_agent.search_tool import (  # noqa: E402
 )
 from research_agent.source_quality import (  # noqa: E402
     assess_source,
+    configure_reputation_from_mapping,
     is_local_pdf_source,
     source_display_name,
     source_quality_summary,
@@ -308,6 +310,14 @@ with st.sidebar:
         help=t(UI_LANG, "pdf_help"),
     )
 
+    reputation_json = st.text_area(
+        t(UI_LANG, "reputation_label"),
+        value=_initial("RESEARCH_AGENT_REPUTATION_JSON"),
+        height=120,
+        placeholder='{"established": ["my-lab.example"], "weights": {"my-lab.example": 15}}',
+        help=t(UI_LANG, "reputation_help"),
+    )
+
 
 # --------------------------------------------------------------------------
 # Builders
@@ -409,6 +419,14 @@ if run_clicked:
         except ConfigError as exc:
             st.error(f"Lỗi cấu hình: {exc}")
             st.stop()
+
+        # Optional: augment source-credibility ranking from the reputation box.
+        if reputation_json.strip():
+            try:
+                configure_reputation_from_mapping(json.loads(reputation_json))
+            except (ValueError, TypeError) as exc:
+                st.error(t(UI_LANG, "reputation_err", err=str(exc)))
+                st.stop()
 
         try:
             _pdf_temp_dir, approved_pdf_path = _prepare_selected_pdf(selected_pdf)
