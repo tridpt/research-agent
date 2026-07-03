@@ -37,7 +37,7 @@ Markdown **có trích dẫn**.
 - **LLM:** bất kỳ API tương thích OpenAI (Groq, Gemini, OpenAI, Ollama...)
 - **Tìm kiếm:** DuckDuckGo (miễn phí) + Tavily (tùy chọn), có fallback tự động
 - **Phụ thuộc lõi:** `httpx`, `trafilatura`, `ddgs` (xuất tùy chọn: `fpdf2` cho PDF, `python-docx` cho Word)
-- **Kiểm thử:** `pytest` + `hypothesis` (279 test, gồm 10 property-based; CI ép coverage ≥ 80%)
+- **Kiểm thử:** `pytest` + `hypothesis` (380+ test, gồm 10 property-based; CI ép coverage ≥ 80%, hiện ~93%)
 - **Chất lượng:** `ruff` (lint) + `mypy` (type-check), CI trên GitHub Actions
 
 Hai mục tiêu xuyên suốt:
@@ -330,7 +330,10 @@ chọn (hãng tin lớn, bách khoa, nhà xuất bản học thuật), trên web
 mạng xã hội — cộng với lượng bằng chứng trích xuất được. `rank_search_results`
 sắp xếp kết quả theo điểm. Có thể **mở rộng** danh sách uy tín bằng file JSON qua
 `load_reputation_file` / `configure_reputation_from_file` (`--reputation-file`),
-bổ sung lên trên các mặc định dựng sẵn.
+bổ sung lên trên các mặc định dựng sẵn. File còn hỗ trợ map `weights`
+(`{"miền": điểm}`) để cộng/trừ điểm theo host hoặc subdomain lên trên heuristic
+loại domain. `configure_reputation_from_mapping` áp dụng cấu hình từ một dict đã
+parse sẵn (dùng cho ô nhập trên Web UI).
 
 ### `memory.py` — Bộ nhớ dài hạn (`--memory`)
 Lưu nghiên cứu cũ (câu hỏi + tóm tắt + URL nguồn) ra file JSON. `tokenize`,
@@ -541,9 +544,19 @@ Biến môi trường (hoặc đặt qua `.env` / cờ CLI):
 | `RESEARCH_AGENT_ROUND_DELAY` | 0 | Độ trễ giữa các vòng (giây) |
 | `RESEARCH_AGENT_STYLE` | standard | Độ dài báo cáo: brief / standard / deep |
 | `RESEARCH_AGENT_PREFETCH` | 3 | Số kết quả tải trước song song (0 = tắt) |
-| `RESEARCH_AGENT_REPUTATION_FILE` | — | File JSON bổ sung domain uy tín/kém |
+| `RESEARCH_AGENT_REPUTATION_FILE` | — | File JSON bổ sung domain uy tín/kém + `weights` (điểm cộng/trừ theo domain) |
 
 Thứ tự ưu tiên: **cờ CLI > biến môi trường > mặc định**.
+
+> File reputation nhận 3 khóa tùy chọn: `established` (danh sách domain uy tín),
+> `low_evidence` (danh sách domain kém), và `weights` (map `{"domain": điểm}` cộng
+> hoặc trừ trực tiếp vào điểm chất lượng, khớp host hoặc subdomain). Xem
+> `reputation.example.json`.
+>
+> **Trên Streamlit Cloud:** UI đọc cấu hình mặc định (API key, base URL, model)
+> từ `st.secrets` khi được deploy, theo thứ tự **secrets > biến môi trường >
+> `.env`** — cho phép dựng bản demo hosted một-chạm mà người dùng vẫn tự nhập key
+> riêng nếu muốn.
 
 ---
 
@@ -556,6 +569,10 @@ File `ui/app.py` (Streamlit) + `ui/helpers.py`. Tái dùng 100% lõi, chỉ thê
 - Chọn chế độ + ngôn ngữ báo cáo (Việt/Anh/tự động).
 - **Giao diện song ngữ** (Việt/Anh) qua `ui/i18n.py` — đổi ở đầu thanh bên.
 - Toggles nâng cao: tải-trước song song, cache LLM, ưu tiên tin mới (recency).
+- Ô **Uy tín nguồn**: dán JSON (`established`/`low_evidence`/`weights`) để tinh
+  chỉnh xếp hạng nguồn cho lượt chạy (áp dụng qua `configure_reputation_from_mapping`).
+- Khi triển khai trên **Streamlit Community Cloud**, cấu hình mặc định (API key,
+  base URL, model) đọc từ `st.secrets` (ưu tiên: secrets > biến môi trường > `.env`).
 - Các thanh trượt giới hạn + độ trễ chống 429.
 - Hiển thị các bước agent theo thời gian thực (Việt/Anh).
 - **Streaming** báo cáo (chế độ Thường) — chữ chạy dần.
@@ -573,7 +590,7 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
 
 ## 13. Kiểm thử
 
-279 test, chia làm:
+382 test, chia làm:
 - **Property-based** (`test_properties.py`, dùng `hypothesis`, ≥100 ví dụ): 10
   thuộc tính đúng đắn của lõi xác định (validate input, cắt nội dung, lọc domain,
   cô lập injection, toàn vẹn trích dẫn, liệt kê nguồn, phân giải config, chuyển
@@ -585,13 +602,15 @@ Khởi động: `.\run-ui.ps1` hoặc `streamlit run ui/app.py`.
   `test_github.py`, `test_prefetch.py`, `test_llm_cache.py`, `test_recency.py`,
   `test_reputation.py`, `test_tool_io.py`, `test_chat.py`, `test_progress.py`,
   `test_ui_helpers.py`, `test_ui_i18n.py`, `test_dictionary.py`,
-  `test_crossref.py`): ví dụ/biên/lỗi cho từng thành phần.
+  `test_crossref.py`, `test_cli.py`, `test_llm_provider.py`,
+  `test_search_providers.py`, `test_fetch_tool_http.py`): ví dụ/biên/lỗi cho
+  từng thành phần.
 - **Tích hợp** (`test_integration.py`): trích xuất HTML, smoke end-to-end,
   hồi quy injection.
 - **Theo chế độ** (`test_reflection.py`, `test_multi_agent.py`,
   `test_enhancements.py`): reflection, multi-agent, cache/diversity/backoff.
 
-Chạy: `pytest` (279 test) · Lint: `ruff check src tests` · Type: `mypy src`
+Chạy: `pytest` (382 test, coverage ~93%) · Lint: `ruff check src tests ui` · Type: `mypy src`
 
 ---
 

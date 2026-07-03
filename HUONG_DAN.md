@@ -185,7 +185,7 @@ bạn không cần bật gì:
 | `--style` | Độ dài/độ sâu báo cáo: `brief` (ngắn), `standard` (mặc định), `deep` (chuyên sâu) |
 | `--prefetch` | Tải trước N kết quả đầu song song để đọc nhanh hơn (0 = tắt, mặc định 3) |
 | `--cache-llm` | Lưu & tái dùng phản hồi LLM cho prompt giống hệt |
-| `--reputation-file` | File JSON bổ sung domain uy tín/kém cho việc xếp hạng nguồn |
+| `--reputation-file` | File JSON bổ sung domain uy tín/kém (kèm `weights` chỉnh điểm theo domain) cho việc xếp hạng nguồn |
 | `--chat` | Sau báo cáo, hỏi nối tiếp ngay trên terminal (trả lời dựa trên báo cáo) |
 | `--lang` | Ép ngôn ngữ báo cáo/trả lời: `vi` hoặc `en` |
 | `--no-cache` | Tắt bộ nhớ đệm (không dùng lại trang đã tải) |
@@ -339,6 +339,10 @@ Trình duyệt sẽ tự mở tại `http://localhost:8501`. Nếu không, mở 
 - **📏 Độ dài báo cáo**: chọn Ngắn gọn / Tiêu chuẩn / Chuyên sâu ở thanh bên.
 - **⚙️ Nâng cao**: chỉnh tải-trước song song, bật cache phản hồi LLM, và ưu tiên
   thông tin mới ngay trong thanh bên.
+- **⭐ Uy tín nguồn**: dán một đoạn JSON để tự chỉnh cách xếp hạng nguồn theo
+  tên miền của bạn — ví dụ
+  `{"established": ["my-lab.example"], "weights": {"my-lab.example": 15}}`
+  (cộng/trừ điểm cho từng miền). Áp dụng cho lượt chạy hiện tại.
 - **⬇️ Tải báo cáo**: dạng **Markdown**, **HTML**, **PDF trực tiếp**, hoặc
   **Word (.docx)** (PDF/Word hỗ trợ tiếng Việt; nếu máy thiếu gói/font, dùng nút
   HTML rồi "In → Lưu thành PDF").
