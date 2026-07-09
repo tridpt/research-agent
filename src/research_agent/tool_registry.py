@@ -20,6 +20,7 @@ from .dictionary import DictionaryError, fetch_definition
 from .github import GitHubError, fetch_github
 from .models import ActionType
 from .news import NewsError, fetch_news
+from .pubmed import PubMedError, fetch_pubmed
 from .stock import StockError, fetch_stock_quote
 from .weather import WeatherError, fetch_weather
 from .wikipedia import WikipediaError, fetch_wikipedia
@@ -164,6 +165,20 @@ INFO_TOOLS: tuple[InfoTool, ...] = (
         param_description="The topic, title, or keywords to search CrossRef for.",
         fetch=lambda arg, _limit: fetch_crossref(arg),
         error=CrossRefError,
+    ),
+    InfoTool(
+        name="pubmed_search",
+        action=ActionType.PUBMED_SEARCH,
+        arg_field="pubmed_query",
+        schema_param="query",
+        description=(
+            "Search PubMed for peer-reviewed biomedical/clinical literature "
+            "(title, authors, journal, year, PMID). Use for medical, health, "
+            "biology, or life-sciences questions that need citation-grade sources."
+        ),
+        param_description="The topic, disease, drug, or keywords to search PubMed for.",
+        fetch=lambda arg, _limit: fetch_pubmed(arg),
+        error=PubMedError,
     ),
 )
 

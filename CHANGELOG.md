@@ -6,6 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **PubMed tool** (`pubmed_search`): the agent can now search PubMed for
+  peer-reviewed biomedical/clinical literature (title, authors, journal, year,
+  PMID) via NCBI's public E-utilities (no API key), complementing the arXiv and
+  CrossRef tools for medical, health, and life-sciences questions. Shown in the
+  web UI's live step log (🧬).
+
 ## [0.1.2] - 2026-07-03
 
 ### Fixed

@@ -115,6 +115,10 @@ def render_step(event, lang: str = "vi") -> str:
         if action == "crossref_search":
             dq = detail.get("doi_query", "")
             return (f"🔬 Đang tìm bài báo (CrossRef): {dq}" if vi else f"🔬 Searching CrossRef: {dq}")
+        if action == "pubmed_search":
+            pmq = detail.get("pubmed_query", "")
+            return (f"🧬 Đang tìm bài báo y sinh (PubMed): {pmq}" if vi
+                    else f"🧬 Searching PubMed: {pmq}")
         if action == "now":
             return ("🗓️ Đang lấy ngày giờ hiện tại" if vi else "🗓️ Getting the current date/time")
         if action == "plan":

@@ -120,6 +120,8 @@ The agent chooses among these tools on each step via native function-calling:
   license, latest release).
 - **get_dictionary** — define an English word (dictionaryapi.dev, no key).
 - **crossref_search** — find peer-reviewed scholarly works via CrossRef (no key).
+- **pubmed_search** — search PubMed for peer-reviewed biomedical/clinical
+  literature (title, authors, journal, year, PMID) via NCBI E-utilities (no key).
 - **read_pdf** — read a PDF explicitly selected by the user for the current run.
 - **finish** — stop and synthesize the cited report.
 
@@ -389,6 +391,7 @@ src/research_agent/
 ├── github.py         # GitHub repository lookup tool (REST API)
 ├── dictionary.py     # English dictionary tool (dictionaryapi.dev, no key)
 ├── crossref.py       # scholarly-works tool (CrossRef REST API, no key)
+├── pubmed.py         # biomedical-literature tool (NCBI E-utilities, no key)
 ├── tool_registry.py  # declarative registry of single-arg info + note tools
 ├── source_quality.py # explainable source-credibility ranking
 ├── evaluate.py       # deterministic metrics + cross-mode benchmark
