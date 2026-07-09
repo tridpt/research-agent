@@ -583,10 +583,14 @@ if run_clicked:
         st.session_state["chat"] = []
 
 # --------------------------------------------------------------------------
-# Show the most recent report (if any) with export + source preview + chat
+# Tab renderers (defined here, wired into st.tabs at the bottom)
 # --------------------------------------------------------------------------
-history = st.session_state.get("history", [])
-if history:
+def render_report_tab() -> None:
+    """Latest report with export, source preview, and grounded follow-up chat."""
+    history = st.session_state.get("history", [])
+    if not history:
+        st.info(t(UI_LANG, "no_report_yet"))
+        return
     latest = history[0]
 
     st.subheader(t(UI_LANG, "report_header"))
@@ -748,8 +752,8 @@ if history:
 # --------------------------------------------------------------------------
 # Side-by-side model comparison
 # --------------------------------------------------------------------------
-st.divider()
-with st.expander(t(UI_LANG, "compare_expander")):
+def render_compare_tab() -> None:
+    """Run one question across multiple models and compare reports + metrics."""
     st.caption(t(UI_LANG, "compare_caption"))
     compare_question = st.text_input(
         t(UI_LANG, "compare_question"),
@@ -813,8 +817,12 @@ with st.expander(t(UI_LANG, "compare_expander")):
 # --------------------------------------------------------------------------
 # Persistent history (survives app restarts)
 # --------------------------------------------------------------------------
-if history:
-    st.divider()
+def render_history_tab() -> None:
+    """Persistent research history (survives app restarts)."""
+    history = st.session_state.get("history", [])
+    if not history:
+        st.caption(t(UI_LANG, "history_empty"))
+        return
     st.subheader(t(UI_LANG, "history_header"))
     st.caption(t(UI_LANG, "history_caption"))
     if st.button(t(UI_LANG, "clear_history")):
@@ -841,3 +849,17 @@ if history:
                     file_name=f"bao-cao-{idx+1}.html", mime="text/html",
                     key=f"dl_html_{idx}", use_container_width=True,
                 )
+
+
+# --------------------------------------------------------------------------
+# Layout: three tabs (Report / Compare / History) below the question + run bar
+# --------------------------------------------------------------------------
+tab_report, tab_compare, tab_history = st.tabs(
+    [t(UI_LANG, "tab_report"), t(UI_LANG, "tab_compare"), t(UI_LANG, "tab_history")]
+)
+with tab_report:
+    render_report_tab()
+with tab_compare:
+    render_compare_tab()
+with tab_history:
+    render_history_tab()

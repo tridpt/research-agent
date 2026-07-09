@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Web UI reorganized into tabs**: the report, model comparison, and research
+  history now live in three dedicated tabs (📄 Báo cáo / ⚖️ So sánh / 🕘 Lịch sử)
+  below a persistent question + run bar, replacing the single long scrolling
+  page. Model comparison is promoted from a collapsed expander to its own tab.
+
 ### Added
 
 - **PubMed tool** (`pubmed_search`): the agent can now search PubMed for

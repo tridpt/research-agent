@@ -176,6 +176,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "compare_btn": {"vi": "⚖️ Chạy so sánh", "en": "⚖️ Run comparison"},
     "compare_err_models": {"vi": "Hãy nhập ít nhất 2 model khác nhau để so sánh.", "en": "Enter at least 2 different models to compare."},
+    "tab_report": {"vi": "📄 Báo cáo", "en": "📄 Report"},
+    "tab_compare": {"vi": "⚖️ So sánh model", "en": "⚖️ Compare models"},
+    "tab_history": {"vi": "🕘 Lịch sử", "en": "🕘 History"},
+    "no_report_yet": {
+        "vi": "Chưa có báo cáo. Nhập câu hỏi phía trên rồi bấm “Bắt đầu nghiên cứu”.",
+        "en": "No report yet. Enter a question above and click “Start research”.",
+    },
+    "history_empty": {"vi": "Chưa có lịch sử nghiên cứu.", "en": "No research history yet."},
     "history_header": {"vi": "🕘 Lịch sử nghiên cứu", "en": "🕘 Research history"},
     "history_caption": {
         "vi": "Được lưu vào file, vẫn còn sau khi tắt/mở lại app.",
