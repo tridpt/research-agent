@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "research-agent"
-version = "0.1.2"
+version = "0.1.3"
 description = "An autonomous CLI AI research agent that searches the web, reads sources, and synthesizes a cited Markdown report."
 readme = "README.md"
 requires-python = ">=3.11"

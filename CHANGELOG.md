@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-09
+
 ### Changed
 
 - **Web UI reorganized into tabs**: the report, model comparison, and research
@@ -97,7 +99,8 @@ report. Works with any OpenAI-compatible LLM (Groq, Gemini, OpenAI, Ollama).
   workflow (Trusted Publishing), and CI on Python 3.11-3.13 enforcing lint,
   type-checks, and ≥80% test coverage.
 
-[Unreleased]: https://github.com/tridpt/research-agent/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/tridpt/research-agent/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/tridpt/research-agent/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/tridpt/research-agent/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tridpt/research-agent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tridpt/research-agent/releases/tag/v0.1.0
