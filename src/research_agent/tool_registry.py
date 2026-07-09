@@ -20,6 +20,7 @@ from .dictionary import DictionaryError, fetch_definition
 from .github import GitHubError, fetch_github
 from .models import ActionType
 from .news import NewsError, fetch_news
+from .openalex import OpenAlexError, fetch_openalex
 from .pubmed import PubMedError, fetch_pubmed
 from .stock import StockError, fetch_stock_quote
 from .weather import WeatherError, fetch_weather
@@ -179,6 +180,20 @@ INFO_TOOLS: tuple[InfoTool, ...] = (
         param_description="The topic, disease, drug, or keywords to search PubMed for.",
         fetch=lambda arg, _limit: fetch_pubmed(arg),
         error=PubMedError,
+    ),
+    InfoTool(
+        name="openalex_search",
+        action=ActionType.OPENALEX_SEARCH,
+        arg_field="openalex_query",
+        schema_param="query",
+        description=(
+            "Search OpenAlex, a large open index of scholarly works across all "
+            "disciplines (title, authors, venue, year, DOI). Use as a general "
+            "academic search when arXiv/PubMed/CrossRef are too narrow."
+        ),
+        param_description="The topic, title, or keywords to search OpenAlex for.",
+        fetch=lambda arg, _limit: fetch_openalex(arg),
+        error=OpenAlexError,
     ),
 )
 

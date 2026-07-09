@@ -119,6 +119,10 @@ def render_step(event, lang: str = "vi") -> str:
             pmq = detail.get("pubmed_query", "")
             return (f"🧬 Đang tìm bài báo y sinh (PubMed): {pmq}" if vi
                     else f"🧬 Searching PubMed: {pmq}")
+        if action == "openalex_search":
+            oaq = detail.get("openalex_query", "")
+            return (f"🎓 Đang tìm học thuật (OpenAlex): {oaq}" if vi
+                    else f"🎓 Searching OpenAlex: {oaq}")
         if action == "now":
             return ("🗓️ Đang lấy ngày giờ hiện tại" if vi else "🗓️ Getting the current date/time")
         if action == "plan":

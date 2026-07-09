@@ -32,6 +32,7 @@ class ActionType(Enum):
     GET_DICTIONARY = "get_dictionary"
     CROSSREF_SEARCH = "crossref_search"
     PUBMED_SEARCH = "pubmed_search"
+    OPENALEX_SEARCH = "openalex_search"
 
 
 class TransitionKind(Enum):
@@ -126,6 +127,7 @@ class AgentDecision:
     word: str | None = None
     doi_query: str | None = None
     pubmed_query: str | None = None
+    openalex_query: str | None = None
 
 
 @dataclass(frozen=True)

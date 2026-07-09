@@ -524,6 +524,8 @@ def _action_event(state: SessionState, decision: AgentDecision) -> TraceEvent:
         detail["doi_query"] = decision.doi_query
     if decision.pubmed_query:
         detail["pubmed_query"] = decision.pubmed_query
+    if decision.openalex_query:
+        detail["openalex_query"] = decision.openalex_query
     return TraceEvent(
         type=TraceEventType.ACTION_SELECTED,
         round_index=state.rounds_used,

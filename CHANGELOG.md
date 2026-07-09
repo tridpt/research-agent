@@ -13,6 +13,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   PMID) via NCBI's public E-utilities (no API key), complementing the arXiv and
   CrossRef tools for medical, health, and life-sciences questions. Shown in the
   web UI's live step log (🧬).
+- **OpenAlex tool** (`openalex_search`): search OpenAlex, a large open index of
+  scholarly works across all disciplines (title, authors, venue, year, DOI),
+  via its public REST API (no API key) — a broad general-purpose academic
+  search when arXiv/PubMed/CrossRef are too narrow. Shown in the web UI's live
+  step log (🎓).
 
 ## [0.1.2] - 2026-07-03
 
