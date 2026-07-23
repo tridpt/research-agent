@@ -248,15 +248,14 @@ def test_generate_stream_fatal_status_raises() -> None:
         list(p.generate_stream([Message(role="user", content="hi")]))
 
 
-def test_generate_stream_records_usage_and_skips_noise() -> None:
-    """Usage blocks accumulate; malformed JSON and empty choices are skipped."""
+def test_generate_stream_records_usage_and_skips_protocol_noise() -> None:
+    """Usage blocks accumulate; non-data lines and empty choices are skipped."""
     from research_agent.usage import UsageTracker
 
     tracker = UsageTracker()
     lines = [
         "ignored non-data line",
-        "data: not-json",  # malformed -> skipped
-        'data: {"choices": []}',  # no choices -> skipped
+        'data: {"choices": []}',  # usage-only/empty chunk -> skipped
         'data: {"choices": [{"delta": {}}]}',  # no content piece -> skipped
         'data: {"choices": [{"delta": {"content": "hi"}}], '
         '"usage": {"prompt_tokens": 3, "completion_tokens": 5}}',

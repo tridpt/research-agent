@@ -32,16 +32,28 @@ def test_fetch_rechecks_redirect_destination_before_request() -> None:
         url_validator=lambda url: public_http_url_error(url, resolver=_resolver("8.8.8.8")),
     )
 
+    class RedirectResponse:
+        status_code = 302
+        headers = {"Location": "http://127.0.0.1/admin"}
+        url = httpx.URL("https://example.test/start")
+
+        @property
+        def is_redirect(self) -> bool:
+            return True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> None:
+            return None
+
     class RedirectClient:
         calls: list[str] = []
 
-        def get(self, url):
+        def stream(self, method, url):
+            assert method == "GET"
             self.calls.append(url)
-            return httpx.Response(
-                302,
-                headers={"Location": "http://127.0.0.1/admin"},
-                request=httpx.Request("GET", url),
-            )
+            return RedirectResponse()
 
     client = RedirectClient()
     tool._client = client  # type: ignore[assignment]

@@ -13,9 +13,19 @@ from research_agent.fetch_tool import FetchOutcome, HttpFetchTool, default_extra
 class _FakeResponse:
     def __init__(self, status_code=200, text="", headers=None, url="https://a.com") -> None:
         self.status_code = status_code
-        self.text = text
+        self._body = text.encode("utf-8")
         self.headers = headers or {}
         self.url = httpx.URL(url)
+        self.encoding = "utf-8"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> None:
+        return None
+
+    def iter_bytes(self):
+        yield self._body
 
     @property
     def is_redirect(self) -> bool:
@@ -23,13 +33,14 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    """Returns queued responses keyed by call order."""
+    """Returns queued streaming responses keyed by call order."""
 
     def __init__(self, responses) -> None:
         self._responses = list(responses)
         self.gets: list[str] = []
 
-    def get(self, url):
+    def stream(self, method, url):
+        assert method == "GET"
         self.gets.append(url)
         resp = self._responses.pop(0)
         if isinstance(resp, Exception):

@@ -16,18 +16,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "ui_lang_label": {"vi": "Ngôn ngữ giao diện", "en": "Interface language"},
     "cfg_header": {"vi": "⚙️ Cấu hình", "en": "⚙️ Configuration"},
     "provider_label": {"vi": "Nhà cung cấp LLM", "en": "LLM provider"},
-    "api_key_label": {"vi": "API key", "en": "API key"},
+    "credential_source_label": {"vi": "Nguồn API key", "en": "API key source"},
+    "credential_server": {"vi": "Do máy chủ quản lý", "en": "Server managed"},
+    "credential_personal": {"vi": "API key cá nhân", "en": "Personal API key"},
+    "credential_server_help": {
+        "vi": "Key máy chủ không được gửi tới trình duyệt và endpoint đã bị khóa.",
+        "en": "The server key is never sent to the browser and its endpoint is locked.",
+    },
+    "api_key_label": {"vi": "API key cá nhân", "en": "Personal API key"},
     "api_key_help": {
-        "vi": "Bấm 'Lưu cấu hình' bên dưới để nhớ lâu dài (ghi vào file .env).",
-        "en": "Click 'Save config' below to persist it (written to the .env file).",
+        "vi": "Chỉ giữ trong phiên trình duyệt hiện tại; không ghi vào .env hay lịch sử.",
+        "en": "Kept only in the current browser session; never written to .env or history.",
     },
     "base_url_label": {"vi": "Base URL", "en": "Base URL"},
-    "model_label": {"vi": "Model", "en": "Model"},
-    "save_cfg_btn": {"vi": "💾 Lưu cấu hình", "en": "💾 Save config"},
-    "save_cfg_ok": {
-        "vi": "Đã lưu vào .env — lần sau mở app sẽ tự điền sẵn.",
-        "en": "Saved to .env — it will be pre-filled next time.",
+    "base_url_help": {
+        "vi": "Chỉ HTTPS và hostname trong allowlist của máy chủ.",
+        "en": "HTTPS only; the hostname must be in the server allowlist.",
     },
+    "model_label": {"vi": "Model", "en": "Model"},
     "mode_label": {"vi": "Chế độ nghiên cứu", "en": "Research mode"},
     "mode_help": {
         "vi": "Reflect: tự chấm điểm và đào sâu. Multi-agent: chia nhỏ câu hỏi.",

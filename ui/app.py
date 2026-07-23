@@ -167,9 +167,13 @@ st.caption(t(UI_LANG, "app_caption"))
 
 
 # --------------------------------------------------------------------------
-# Persisted config (.env) + persistent history (json)
+# Read-only server config (.env/secrets) + persistent history (json)
 # --------------------------------------------------------------------------
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+_SECRET_CONFIG_KEYS = frozenset({"RESEARCH_AGENT_API_KEY", "RESEARCH_AGENT_TAVILY_API_KEY"})
+_DEFAULT_ALLOWED_LLM_HOSTS = frozenset(
+    {"api.groq.com", "generativelanguage.googleapis.com", "api.openai.com"}
+)
 
 
 def load_env_file() -> dict[str, str]:
@@ -184,28 +188,59 @@ def load_env_file() -> dict[str, str]:
     return data
 
 
-def save_env_file(values: dict[str, str]) -> None:
-    current = load_env_file()
-    current.update({k: v for k, v in values.items() if v})
-    lines = [
-        "# Saved by the Research Agent UI. Keep this file private.",
-        *[f"{k}={v}" for k, v in current.items()],
-        "",
-    ]
-    ENV_PATH.write_text("\n".join(lines), encoding="utf-8")
-
-
 _SAVED = load_env_file()
 
 
-def _initial(key: str, default: str = "") -> str:
-    # Precedence: saved .env > Streamlit secrets (Cloud) > process env > default.
-    # st.secrets lets a maintainer pre-configure a one-click hosted demo without
-    # a .env file; users can still override any value in the sidebar.
+def _server_value(key: str, default: str = "") -> str:
+    """Read server-owned config without ever copying it into a user widget."""
     saved = _SAVED.get(key)
     if saved:
         return saved
     return secret_default(getattr(st, "secrets", None), dict(os.environ), key, default)
+
+
+def _initial(key: str, default: str = "") -> str:
+    """Return a non-secret widget default from server config."""
+    if key in _SECRET_CONFIG_KEYS:
+        return default
+    return _server_value(key, default)
+
+
+def _allowed_llm_hosts() -> frozenset[str]:
+    configured = _server_value("RESEARCH_AGENT_ALLOWED_LLM_HOSTS")
+    extras = {
+        host.strip().rstrip(".").lower()
+        for host in configured.split(",")
+        if host.strip()
+    }
+    return _DEFAULT_ALLOWED_LLM_HOSTS | extras
+
+
+def _validated_llm_base_url(value: str) -> str:
+    """Enforce the web UI's HTTPS and exact-host allowlist boundary."""
+    from urllib.parse import urlsplit
+
+    try:
+        parsed = urlsplit(value.strip())
+        port = parsed.port
+    except ValueError as exc:
+        raise ConfigError("LLM Base URL không hợp lệ.") from exc
+    host = (parsed.hostname or "").rstrip(".").lower()
+    if parsed.scheme.lower() != "https":
+        raise ConfigError("LLM Base URL phải sử dụng HTTPS trong web UI.")
+    if not host or parsed.username or parsed.password:
+        raise ConfigError("LLM Base URL phải có hostname hợp lệ và không chứa credentials.")
+    if parsed.query or parsed.fragment:
+        raise ConfigError("LLM Base URL không được chứa query string hoặc fragment.")
+    if host not in _allowed_llm_hosts():
+        raise ConfigError(
+            "Hostname LLM chưa được cho phép. Quản trị viên phải thêm hostname chính xác "
+            "vào RESEARCH_AGENT_ALLOWED_LLM_HOSTS."
+        )
+    default_port = port in (None, 443)
+    authority = host if default_port else f"{host}:{port}"
+    path = parsed.path.rstrip("/")
+    return f"https://{authority}{path}"
 
 
 # Load persistent history once into session state.
@@ -222,30 +257,76 @@ with st.sidebar:
 
     _saved_provider = _SAVED.get("RESEARCH_AGENT_PROVIDER_LABEL", "Groq")
     _provider_names = list(PRESETS.keys())
-    _provider_index = _provider_names.index(_saved_provider) if _saved_provider in _provider_names else 0
-    provider = st.selectbox(t(UI_LANG, "provider_label"), _provider_names, index=_provider_index)
-    preset_url, preset_model = PRESETS[provider]
+    if _saved_provider not in _provider_names:
+        _saved_provider = "Khác (tùy chỉnh)"
 
-    api_key = st.text_input(
-        t(UI_LANG, "api_key_label"),
-        type="password",
-        value=_initial("RESEARCH_AGENT_API_KEY"),
-        help=t(UI_LANG, "api_key_help"),
-    )
-    base_url = st.text_input(t(UI_LANG, "base_url_label"), value=_initial("RESEARCH_AGENT_BASE_URL", preset_url))
-    model = st.text_input(t(UI_LANG, "model_label"), value=_initial("RESEARCH_AGENT_MODEL", preset_model))
-
-    if st.button(t(UI_LANG, "save_cfg_btn"), use_container_width=True):
-        save_env_file(
-            {
-                "RESEARCH_AGENT_API_KEY": api_key,
-                "RESEARCH_AGENT_BASE_URL": base_url,
-                "RESEARCH_AGENT_MODEL": model,
-                "RESEARCH_AGENT_PROVIDER_LABEL": provider,
-                "RESEARCH_AGENT_TAVILY_API_KEY": st.session_state.get("tavily_key_val", ""),
-            }
+    _server_api_key = _server_value("RESEARCH_AGENT_API_KEY")
+    if _server_api_key:
+        credential_mode = st.radio(
+            t(UI_LANG, "credential_source_label"),
+            [t(UI_LANG, "credential_server"), t(UI_LANG, "credential_personal")],
+            help=t(UI_LANG, "credential_server_help"),
         )
-        st.success(t(UI_LANG, "save_cfg_ok"))
+        use_server_credential = credential_mode == t(UI_LANG, "credential_server")
+    else:
+        use_server_credential = False
+
+    if use_server_credential:
+        provider = _saved_provider
+        preset_url, preset_model = PRESETS.get(provider, ("", ""))
+        base_url = _server_value("RESEARCH_AGENT_BASE_URL", preset_url)
+        model = st.text_input(
+            t(UI_LANG, "model_label"),
+            value=_server_value("RESEARCH_AGENT_MODEL", preset_model),
+            key="server_managed_model",
+        )
+        st.text_input(
+            t(UI_LANG, "base_url_label"),
+            value=base_url,
+            disabled=True,
+            key="server_managed_base_url",
+            help=t(UI_LANG, "credential_server_help"),
+        )
+        st.caption(t(UI_LANG, "credential_server_help"))
+        api_key = _server_api_key
+    else:
+        _provider_index = _provider_names.index(_saved_provider)
+        provider = st.selectbox(
+            t(UI_LANG, "provider_label"),
+            _provider_names,
+            index=_provider_index,
+            key="personal_provider",
+        )
+        preset_url, preset_model = PRESETS[provider]
+        api_key = st.text_input(
+            t(UI_LANG, "api_key_label"),
+            type="password",
+            key="user_llm_api_key",
+            help=t(UI_LANG, "api_key_help"),
+        )
+        is_custom_provider = provider == "Khác (tùy chỉnh)"
+        custom_url_default = (
+            _initial("RESEARCH_AGENT_BASE_URL")
+            if is_custom_provider and _saved_provider == provider
+            else ""
+        )
+        base_url = st.text_input(
+            t(UI_LANG, "base_url_label"),
+            value=custom_url_default if is_custom_provider else preset_url,
+            disabled=not is_custom_provider,
+            key=f"personal_base_url_{provider}",
+            help=t(UI_LANG, "base_url_help"),
+        )
+        model_default = (
+            _initial("RESEARCH_AGENT_MODEL")
+            if is_custom_provider and _saved_provider == provider
+            else preset_model
+        )
+        model = st.text_input(
+            t(UI_LANG, "model_label"),
+            value=model_default,
+            key=f"personal_model_{provider}",
+        )
 
     st.divider()
     _mode_options = ["Thường", "Tự đánh giá (reflect)", "Đa agent (multi-agent)"]
@@ -305,12 +386,13 @@ with st.sidebar:
     cache_llm = st.checkbox(t(UI_LANG, "cache_llm_label"), value=False, help=t(UI_LANG, "cache_llm_help"))
     recency_boost = st.checkbox(t(UI_LANG, "recency_label"), value=False, help=t(UI_LANG, "recency_help"))
 
-    tavily_key = st.text_input(
-        t(UI_LANG, "tavily_label"), type="password",
-        value=_initial("RESEARCH_AGENT_TAVILY_API_KEY"),
+    user_tavily_key = st.text_input(
+        t(UI_LANG, "tavily_label"),
+        type="password",
         key="tavily_key_val",
         help=t(UI_LANG, "tavily_help"),
     )
+    tavily_key = user_tavily_key or _server_value("RESEARCH_AGENT_TAVILY_API_KEY")
 
     selected_pdf = st.file_uploader(
         t(UI_LANG, "pdf_label"),
@@ -331,9 +413,10 @@ with st.sidebar:
 # Builders
 # --------------------------------------------------------------------------
 def _build_settings():
+    safe_base_url = _validated_llm_base_url(base_url)
     overrides = {
         "api_key": api_key,
-        "base_url": base_url,
+        "base_url": safe_base_url,
         "model": model,
         "max_rounds": max_rounds,
         "max_sources": max_sources,

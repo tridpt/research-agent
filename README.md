@@ -247,17 +247,28 @@ A simple Streamlit web interface is included:
 streamlit run ui/app.py          # or: .\run-ui.ps1
 ```
 
-Then open http://localhost:8501. Pick a provider, paste your API key, choose a
-mode (normal / reflect / multi-agent), enter a question, and watch the agent's
-steps live before the cited report appears. The UI is bilingual
-(Vietnamese/English — switch at the top of the sidebar) and exposes advanced
-toggles for parallel prefetch, the LLM response cache, and recency steering.
+Then open http://localhost:8501. Choose either the server-managed credential
+(if the maintainer configured one) or a personal API key, choose a mode
+(normal / reflect / multi-agent), enter a question, and watch the agent's steps
+live before the cited report appears. Personal LLM and Tavily keys stay only in
+the current Streamlit session and are never written to `.env` or pre-filled
+from server secrets. The UI is bilingual (Vietnamese/English — switch at the
+top of the sidebar) and exposes advanced toggles for parallel prefetch, the LLM
+response cache, and recency steering.
+
+Custom LLM endpoints in the web UI must use HTTPS and a personal key. Their
+exact hostname must also be included by the maintainer in the comma-separated
+`RESEARCH_AGENT_ALLOWED_LLM_HOSTS` setting. The built-in Groq, Gemini, and
+OpenAI hosts are allowed automatically. This restriction applies to the web UI;
+the CLI can still target an explicitly configured local provider such as
+Ollama.
 
 > **Live demo:** there is no static demo link because this is a Python app
 > (not a static site), so it can't run on GitHub Pages. To share it online, deploy
-> to [Streamlit Community Cloud](https://streamlit.io/cloud) (users still supply
-> their own API key). Locally it runs in any modern browser (Chrome, Edge,
-> Firefox, Safari).
+> to [Streamlit Community Cloud](https://streamlit.io/cloud). Visitors can use
+> their own session-only API key; a maintainer may alternatively expose a
+> server-managed credential with its endpoint locked. Locally it runs in any
+> modern browser (Chrome, Edge, Firefox, Safari).
 
 Examples:
 
@@ -322,14 +333,16 @@ docker run --rm -e RESEARCH_AGENT_API_KEY=your-key research-agent `
 **Streamlit Community Cloud** (one-click hosted demo): push this repo to GitHub,
 create an app at https://streamlit.io/cloud pointing at `ui/app.py`. The bundled
 `requirements.txt` and `.streamlit/config.toml` are picked up automatically.
-Visitors can supply their own API key in the sidebar, or a maintainer can
-pre-fill the demo by adding secrets in the app's **Settings → Secrets** (they
-take precedence over the sidebar defaults):
+Visitors can supply their own session-only API key in the sidebar. A maintainer
+can instead add a server-managed credential in **Settings → Secrets**. The key
+is never pre-filled into a browser widget, and its base URL is locked:
 
 ```toml
 RESEARCH_AGENT_API_KEY = "gsk_...your key..."
 RESEARCH_AGENT_BASE_URL = "https://api.groq.com/openai/v1"
 RESEARCH_AGENT_MODEL = "openai/gpt-oss-20b"
+# Required only for additional custom HTTPS hosts:
+# RESEARCH_AGENT_ALLOWED_LLM_HOSTS = "llm.example.com"
 ```
 
 **PyPI**: pushing a `v*` tag triggers `.github/workflows/publish.yml`, which

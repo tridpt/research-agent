@@ -200,6 +200,20 @@ def _recover_from_failed_generation(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _chat_message(data: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return the first assistant message or raise a stable protocol error."""
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise LLMError("LLM returned an invalid response: choices must be a non-empty list")
+    first = choices[0]
+    if not isinstance(first, Mapping):
+        raise LLMError("LLM returned an invalid response: choice must be an object")
+    message = first.get("message")
+    if not isinstance(message, Mapping):
+        raise LLMError("LLM returned an invalid response: message must be an object")
+    return message
+
+
 class OpenAICompatibleProvider:
     """Minimal OpenAI-compatible chat client built on httpx.
 
@@ -249,9 +263,17 @@ class OpenAICompatibleProvider:
             )
         if resp.status_code >= 400:
             raise LLMError(f"LLM HTTP {resp.status_code}: {resp.text[:4000]}")
-        data = resp.json()
-        if self._usage is not None and isinstance(data, dict):
-            self._usage.record(data.get("usage"))
+        try:
+            data = resp.json()
+        except (TypeError, ValueError) as exc:
+            raise LLMError("LLM returned malformed JSON") from exc
+        if not isinstance(data, Mapping):
+            raise LLMError("LLM returned an invalid response: root must be an object")
+        if self._usage is not None:
+            usage = data.get("usage")
+            if usage is not None and not isinstance(usage, Mapping):
+                raise LLMError("LLM returned an invalid response: usage must be an object")
+            self._usage.record(usage)
         return data
 
     def decide_action(self, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> RawDecision:
@@ -276,12 +298,20 @@ class OpenAICompatibleProvider:
                 return recovered
             raise
 
-        message = data["choices"][0]["message"]
+        message = _chat_message(data)
         tool_calls = message.get("tool_calls") or []
+        if not isinstance(tool_calls, list):
+            raise LLMError("LLM returned an invalid response: tool_calls must be a list")
         if tool_calls:
             call = tool_calls[0]
+            if not isinstance(call, Mapping):
+                raise LLMError("LLM returned an invalid response: tool call must be an object")
             fn = call.get("function", {})
+            if not isinstance(fn, Mapping):
+                raise LLMError("LLM returned an invalid response: function must be an object")
             name = fn.get("name", "")
+            if not isinstance(name, str):
+                raise LLMError("LLM returned an invalid response: function name must be text")
             try:
                 args = json.loads(fn.get("arguments") or "{}")
             except (json.JSONDecodeError, TypeError):
@@ -291,20 +321,26 @@ class OpenAICompatibleProvider:
             return {"action": name, **args}
         # No tool call: try to parse any JSON content as a fallback.
         content = message.get("content")
+        if content is not None and not isinstance(content, str):
+            raise LLMError("LLM returned an invalid response: content must be text or null")
         recovered = _recover_from_failed_generation(content or "")
         if recovered is not None:
             return recovered
         return {"action": "__no_tool_call__", "raw": content}
 
     def generate(self, messages: Sequence[Message]) -> str:
-        data = self._chat(messages)
-        return data["choices"][0]["message"]["content"]
+        message = _chat_message(self._chat(messages))
+        content = message.get("content")
+        if not isinstance(content, str):
+            raise LLMError("LLM returned an invalid response: content must be text")
+        return content
 
     def generate_stream(self, messages: Sequence[Message]) -> Iterator[str]:
         """Yield text chunks as they arrive (Server-Sent Events streaming).
 
-        Falls back to a single chunk if the server doesn't support streaming.
         Usage totals are recorded if the final chunk includes a usage block.
+        Invalid JSON or an invalid OpenAI-compatible schema raises ``LLMError``
+        instead of leaking ``ValueError``, ``KeyError`` or ``AttributeError``.
         """
         payload = {
             "model": self._model,
@@ -330,15 +366,39 @@ class OpenAICompatibleProvider:
                         break
                     try:
                         chunk = json.loads(data_str)
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                    if self._usage is not None and chunk.get("usage"):
-                        self._usage.record(chunk.get("usage"))
+                    except (json.JSONDecodeError, TypeError) as exc:
+                        raise LLMError("LLM returned malformed streaming JSON") from exc
+                    if not isinstance(chunk, Mapping):
+                        raise LLMError("LLM returned an invalid streaming response")
+                    usage = chunk.get("usage")
+                    if usage is not None and not isinstance(usage, Mapping):
+                        raise LLMError(
+                            "LLM returned an invalid streaming response: usage must be an object"
+                        )
+                    if self._usage is not None:
+                        self._usage.record(usage)
                     choices = chunk.get("choices") or []
+                    if not isinstance(choices, list):
+                        raise LLMError(
+                            "LLM returned an invalid streaming response: choices must be a list"
+                        )
                     if not choices:
                         continue
-                    delta = choices[0].get("delta") or {}
+                    choice = choices[0]
+                    if not isinstance(choice, Mapping):
+                        raise LLMError(
+                            "LLM returned an invalid streaming response: choice must be an object"
+                        )
+                    delta = choice.get("delta") or {}
+                    if not isinstance(delta, Mapping):
+                        raise LLMError(
+                            "LLM returned an invalid streaming response: delta must be an object"
+                        )
                     piece = delta.get("content")
+                    if piece is not None and not isinstance(piece, str):
+                        raise LLMError(
+                            "LLM returned an invalid streaming response: content must be text"
+                        )
                     if piece:
                         yield piece
         except self._httpx.TimeoutException as exc:
