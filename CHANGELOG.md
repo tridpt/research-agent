@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-24
+
 ### Security
 
 - **Web UI credential handling hardened**: server-managed API keys are never
