@@ -320,12 +320,15 @@ docker build -t research-agent .
 docker run --rm -p 8501:8501 -e RESEARCH_AGENT_API_KEY=your-key research-agent
 ```
 
-Then open http://localhost:8501. The image bundles a Unicode font so PDF export
-works. To run the CLI instead, override the command:
+Then open http://localhost:8501. The image is a hardened multi-stage build: it
+runs as a non-root user, includes only runtime dependencies (no dev/test
+toolchain), bundles a Unicode font so PDF export works, and defines a health
+check. To run the CLI instead, override the command (the `research-agent`
+console script is on the image's PATH):
 
 ```powershell
 docker run --rm -e RESEARCH_AGENT_API_KEY=your-key research-agent `
-  uv run --frozen research-agent "What are the tradeoffs of RAG vs fine-tuning?" -v
+  research-agent "What are the tradeoffs of RAG vs fine-tuning?" -v
 ```
 
 ## Deploy
