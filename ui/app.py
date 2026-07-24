@@ -28,6 +28,14 @@ if str(_SRC) not in sys.path:
 
 # Local UI helpers.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config_ui import (  # noqa: E402
+    PRESETS,
+    QUALITY_LABELS_VI,
+    SECRET_CONFIG_KEYS,
+    load_env_file,
+    parse_allowed_hosts,
+    validated_llm_base_url,
+)
 from helpers import (  # noqa: E402
     add_history_item,
     load_history,
@@ -37,6 +45,7 @@ from helpers import (  # noqa: E402
     secret_default,
 )
 from i18n import t  # noqa: E402
+from steps import render_step  # noqa: E402
 
 from research_agent.agent import run_session  # noqa: E402
 from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
@@ -46,7 +55,7 @@ from research_agent.errors import ConfigError, LLMError  # noqa: E402
 from research_agent.evaluate import evaluate_report  # noqa: E402
 from research_agent.fetch_tool import HttpFetchTool  # noqa: E402
 from research_agent.llm import Message, OpenAICompatibleProvider  # noqa: E402
-from research_agent.models import Report, SessionState, TraceEventType  # noqa: E402
+from research_agent.models import Report, SessionState  # noqa: E402
 from research_agent.multi_agent import run_multi_agent  # noqa: E402
 from research_agent.observability import CollectingEmitter  # noqa: E402
 from research_agent.reflection import run_with_reflection  # noqa: E402
@@ -68,98 +77,6 @@ from research_agent.synthesizer import synthesize, synthesize_stream  # noqa: E4
 from research_agent.url_safety import public_http_url_error  # noqa: E402
 from research_agent.usage import UsageTracker, format_usage  # noqa: E402
 
-
-def render_step(event, lang: str = "vi") -> str:
-    """Describe one agent step in a user-friendly way (Vietnamese or English)."""
-    vi = lang != "en"
-    detail = event.detail or {}
-    rnd = event.round_index
-    if event.type is TraceEventType.ACTION_SELECTED:
-        action = detail.get("action", "")
-        q = detail.get("query", "")
-        if action == "search":
-            return (f"🔍 Đang tìm kiếm trên web: “{q}”" if vi else f"🔍 Searching the web: “{q}”")
-        if action == "read":
-            u = detail.get("url", "")
-            return (f"📖 Đang đọc nguồn: {u}" if vi else f"📖 Reading source: {u}")
-        if action == "finish":
-            return ("✅ Đã đủ thông tin — bắt đầu viết báo cáo" if vi
-                    else "✅ Enough information — writing the report")
-        if action == "calculate":
-            e = detail.get("expression", "")
-            return (f"🧮 Đang tính toán: {e}" if vi else f"🧮 Calculating: {e}")
-        if action == "get_weather":
-            loc = detail.get("location", "")
-            return (f"🌦️ Đang lấy thời tiết: {loc}" if vi else f"🌦️ Getting weather: {loc}")
-        if action == "get_stock":
-            s = detail.get("symbol", "")
-            return (f"📈 Đang lấy dữ liệu chứng khoán: {s}" if vi else f"📈 Getting stock quote: {s}")
-        if action == "get_wikipedia":
-            tpc = detail.get("topic", "")
-            return (f"📚 Đang tra Wikipedia: {tpc}" if vi else f"📚 Looking up Wikipedia: {tpc}")
-        if action == "arxiv_search":
-            pq = detail.get("paper_query", "")
-            return (f"🎓 Đang tìm bài báo arXiv: {pq}" if vi else f"🎓 Searching arXiv: {pq}")
-        if action == "convert":
-            c = detail.get("conversion", "")
-            return (f"🔁 Đang chuyển đổi: {c}" if vi else f"🔁 Converting: {c}")
-        if action == "get_news":
-            nq = detail.get("news_query", "")
-            return (f"📰 Đang tìm tin gần đây: {nq}" if vi else f"📰 Finding recent news: {nq}")
-        if action == "get_github":
-            r = detail.get("repo", "")
-            return (f"🐙 Đang tra GitHub: {r}" if vi else f"🐙 Looking up GitHub: {r}")
-        if action == "get_dictionary":
-            w = detail.get("word", "")
-            return (f"📖 Đang tra từ điển: {w}" if vi else f"📖 Looking up the dictionary: {w}")
-        if action == "crossref_search":
-            dq = detail.get("doi_query", "")
-            return (f"🔬 Đang tìm bài báo (CrossRef): {dq}" if vi else f"🔬 Searching CrossRef: {dq}")
-        if action == "pubmed_search":
-            pmq = detail.get("pubmed_query", "")
-            return (f"🧬 Đang tìm bài báo y sinh (PubMed): {pmq}" if vi
-                    else f"🧬 Searching PubMed: {pmq}")
-        if action == "openalex_search":
-            oaq = detail.get("openalex_query", "")
-            return (f"🎓 Đang tìm học thuật (OpenAlex): {oaq}" if vi
-                    else f"🎓 Searching OpenAlex: {oaq}")
-        if action == "now":
-            return ("🗓️ Đang lấy ngày giờ hiện tại" if vi else "🗓️ Getting the current date/time")
-        if action == "plan":
-            subs = detail.get("sub_questions", "")
-            head = ("🧩 Lập kế hoạch, chia thành các câu hỏi nhỏ:" if vi
-                    else "🧩 Planning — splitting into sub-questions:")
-            return head + "\n   • " + subs.replace(" | ", "\n   • ")
-        return (f"⚙️ Hành động: {action}" if vi else f"⚙️ Action: {action}")
-    if event.type is TraceEventType.ROUND_COMPLETED:
-        return (f"   ↳ Xong vòng {rnd} · đã thu thập {event.sources_count} nguồn" if vi
-                else f"   ↳ Round {rnd} done · {event.sources_count} sources collected")
-    err = detail.get("error", "")
-    if "already read" in err:
-        return ("   ⚠️ Nguồn này đã đọc rồi, bỏ qua" if vi else "   ⚠️ Already read this source, skipping")
-    if "domain cap" in err:
-        return ("   ⚠️ Đã đủ nguồn từ trang này, chuyển sang trang khác" if vi
-                else "   ⚠️ Enough from this site, switching to another")
-    if "previously failed" in err or "substituting" in err:
-        return ("   ↻ Nguồn lỗi, tự chuyển sang nguồn khác" if vi
-                else "   ↻ Source failed, switching to another")
-    if "fetch" in err or "HTTP" in err or "SSL" in err:
-        return ("   ⚠️ Không tải được trang này (có thể bị chặn), thử nguồn khác" if vi
-                else "   ⚠️ Couldn't load this page (maybe blocked), trying another")
-    if "search" in err:
-        return ("   ⚠️ Tìm kiếm không có kết quả, thử lại" if vi else "   ⚠️ Search returned nothing, retrying")
-    return f"   ⚠️ {err}"
-
-
-# Provider presets: label -> (base_url, default_model).
-PRESETS = {
-    "Groq": ("https://api.groq.com/openai/v1", "openai/gpt-oss-20b"),
-    "Gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-2.5-flash-lite"),
-    "OpenAI": ("https://api.openai.com/v1", "gpt-4o-mini"),
-    "Khác (tùy chỉnh)": ("", ""),
-}
-QUALITY_LABELS_VI = {"high": "Cao", "medium": "Trung bình", "low": "Thấp"}
-
 st.set_page_config(page_title="Research Agent", page_icon="🔎", layout="wide")
 UI_LANG = "en" if st.session_state.get("ui_lang") == "English" else "vi"
 st.title(t(UI_LANG, "app_title"))
@@ -170,25 +87,7 @@ st.caption(t(UI_LANG, "app_caption"))
 # Read-only server config (.env/secrets) + persistent history (json)
 # --------------------------------------------------------------------------
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-_SECRET_CONFIG_KEYS = frozenset({"RESEARCH_AGENT_API_KEY", "RESEARCH_AGENT_TAVILY_API_KEY"})
-_DEFAULT_ALLOWED_LLM_HOSTS = frozenset(
-    {"api.groq.com", "generativelanguage.googleapis.com", "api.openai.com"}
-)
-
-
-def load_env_file() -> dict[str, str]:
-    data: dict[str, str] = {}
-    if ENV_PATH.exists():
-        for raw in ENV_PATH.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            data[k.strip()] = v.strip()
-    return data
-
-
-_SAVED = load_env_file()
+_SAVED = load_env_file(ENV_PATH)
 
 
 def _server_value(key: str, default: str = "") -> str:
@@ -201,46 +100,15 @@ def _server_value(key: str, default: str = "") -> str:
 
 def _initial(key: str, default: str = "") -> str:
     """Return a non-secret widget default from server config."""
-    if key in _SECRET_CONFIG_KEYS:
+    if key in SECRET_CONFIG_KEYS:
         return default
     return _server_value(key, default)
 
 
-def _allowed_llm_hosts() -> frozenset[str]:
-    configured = _server_value("RESEARCH_AGENT_ALLOWED_LLM_HOSTS")
-    extras = {
-        host.strip().rstrip(".").lower()
-        for host in configured.split(",")
-        if host.strip()
-    }
-    return _DEFAULT_ALLOWED_LLM_HOSTS | extras
-
-
 def _validated_llm_base_url(value: str) -> str:
-    """Enforce the web UI's HTTPS and exact-host allowlist boundary."""
-    from urllib.parse import urlsplit
-
-    try:
-        parsed = urlsplit(value.strip())
-        port = parsed.port
-    except ValueError as exc:
-        raise ConfigError("LLM Base URL không hợp lệ.") from exc
-    host = (parsed.hostname or "").rstrip(".").lower()
-    if parsed.scheme.lower() != "https":
-        raise ConfigError("LLM Base URL phải sử dụng HTTPS trong web UI.")
-    if not host or parsed.username or parsed.password:
-        raise ConfigError("LLM Base URL phải có hostname hợp lệ và không chứa credentials.")
-    if parsed.query or parsed.fragment:
-        raise ConfigError("LLM Base URL không được chứa query string hoặc fragment.")
-    if host not in _allowed_llm_hosts():
-        raise ConfigError(
-            "Hostname LLM chưa được cho phép. Quản trị viên phải thêm hostname chính xác "
-            "vào RESEARCH_AGENT_ALLOWED_LLM_HOSTS."
-        )
-    default_port = port in (None, 443)
-    authority = host if default_port else f"{host}:{port}"
-    path = parsed.path.rstrip("/")
-    return f"https://{authority}{path}"
+    """Validate a base URL against the server-configured LLM host allowlist."""
+    allowed = parse_allowed_hosts(_server_value("RESEARCH_AGENT_ALLOWED_LLM_HOSTS"))
+    return validated_llm_base_url(value, allowed)
 
 
 # Load persistent history once into session state.
