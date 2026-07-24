@@ -14,6 +14,22 @@ from urllib.parse import urlsplit
 Resolver = Callable[..., list[tuple]]
 
 
+def public_ip_error(address: str) -> str | None:
+    """Return an error unless ``address`` is a single global (public) IP.
+
+    Shared by the pre-request URL check and the post-connect peer-IP check so
+    both apply an identical policy against loopback, private, link-local, and
+    reserved ranges.
+    """
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return "hostname resolved to an invalid address"
+    if not ip.is_global:
+        return "private, loopback, link-local, or reserved addresses are not allowed"
+    return None
+
+
 def public_http_url_error(url: str, resolver: Resolver = socket.getaddrinfo) -> str | None:
     """Return an explanatory error unless ``url`` resolves only to public IPs.
 
@@ -54,10 +70,7 @@ def public_http_url_error(url: str, resolver: Resolver = socket.getaddrinfo) -> 
         return "hostname could not be resolved"
 
     for address in addresses:
-        try:
-            ip = ipaddress.ip_address(address)
-        except ValueError:
-            return "hostname resolved to an invalid address"
-        if not ip.is_global:
-            return "private, loopback, link-local, or reserved addresses are not allowed"
+        error = public_ip_error(address)
+        if error is not None:
+            return error
     return None

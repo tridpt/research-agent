@@ -12,7 +12,7 @@ from typing import Protocol
 
 from .content import is_blocked, truncate_content
 from .models import Source
-from .url_safety import public_http_url_error
+from .url_safety import public_http_url_error, public_ip_error
 
 
 @dataclass(frozen=True)
@@ -87,6 +87,29 @@ class HttpFetchTool:
         )
         self._httpx = httpx
 
+    def _peer_ip_error(self, response) -> str | None:
+        """Reject the connection if the *actual* peer IP is not public.
+
+        DNS rebinding can pass the pre-request hostname check yet connect to a
+        private address. httpx exposes the connected server address on the
+        network stream, so we verify the real peer before trusting the body.
+        When the transport does not expose it (e.g. in tests), we skip silently
+        and rely on the pre-request check.
+        """
+        extensions = getattr(response, "extensions", None)
+        if not extensions:
+            return None
+        stream = extensions.get("network_stream")
+        if stream is None:
+            return None
+        try:
+            server_addr = stream.get_extra_info("server_addr")
+        except Exception:  # noqa: BLE001 - extra info is best-effort
+            return None
+        if not server_addr:
+            return None
+        return public_ip_error(str(server_addr[0]))
+
     def _read_limited_text(self, response) -> str:
         content_length = response.headers.get("Content-Length")
         if content_length:
@@ -135,6 +158,9 @@ class HttpFetchTool:
                                 error=f"unsafe redirect URL: {unsafe_reason}"
                             )
                         continue
+                    peer_error = self._peer_ip_error(resp)
+                    if peer_error is not None:
+                        return FetchOutcome(error=f"unsafe peer address: {peer_error}")
                     if resp.status_code >= 400:
                         return FetchOutcome(error=f"fetch HTTP {resp.status_code} for {final_url}")
                     text = self._extractor(self._read_limited_text(resp))

@@ -63,6 +63,50 @@ def test_fetch_rechecks_redirect_destination_before_request() -> None:
     assert client.calls == ["https://example.test/start"]
 
 
+def test_fetch_rejects_private_peer_ip_after_connect() -> None:
+    """DNS rebinding: hostname passes validation but connects to a private IP."""
+
+    class _Stream:
+        def get_extra_info(self, key):
+            return ("127.0.0.1", 443) if key == "server_addr" else None
+
+    class _RebindResponse:
+        status_code = 200
+        headers: dict[str, str] = {}
+        url = httpx.URL("https://example.test/x")
+        encoding = "utf-8"
+        extensions = {"network_stream": _Stream()}
+
+        @property
+        def is_redirect(self) -> bool:
+            return False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> None:
+            return None
+
+        def iter_bytes(self):
+            raise AssertionError("body must not be read from a rebound host")
+
+    class _RebindClient:
+        def stream(self, method, url):
+            assert method == "GET"
+            return _RebindResponse()
+
+    tool = HttpFetchTool(
+        blocked_domains=frozenset(),
+        per_source_char_limit=100,
+        url_validator=lambda url: public_http_url_error(url, resolver=_resolver("8.8.8.8")),
+    )
+    tool._client = _RebindClient()  # type: ignore[assignment]
+    outcome = tool.fetch("https://example.test/x")
+
+    assert not outcome.ok
+    assert "unsafe peer address" in (outcome.error or "")
+
+
 def test_approved_pdf_path_requires_exact_user_selection(tmp_path: Path) -> None:
     selected = tmp_path / "selected.pdf"
     selected.write_bytes(b"%PDF-1.4\n")
