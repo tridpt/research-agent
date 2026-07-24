@@ -12,7 +12,7 @@ from pathlib import Path
 from .agent import run_session
 from .cache import CachingFetchTool, FetchCache
 from .chat import run_chat_loop
-from .config import ENV_REPUTATION_FILE, resolve_settings
+from .config import ENV_REPUTATION_FILE, request_timeout, resolve_settings
 from .errors import ConfigError, LLMError, ReportWriteError
 from .fetch_tool import FetchTool, HttpFetchTool
 from .llm import LLMProvider, OpenAICompatibleProvider
@@ -143,6 +143,7 @@ def _build_search_and_fetch(settings, use_cache: bool = True) -> tuple[SearchToo
     fetch: FetchTool = HttpFetchTool(
         blocked_domains=settings.blocked_domains,
         per_source_char_limit=settings.per_source_char_limit,
+        timeout=request_timeout(settings.budget.max_seconds, 30.0),
     )
     if use_cache:
         cache_dir = settings.cache_dir or Path(".research_agent_cache")
@@ -189,7 +190,10 @@ def main(argv: Sequence[str]) -> int:
     question = read_question(args, lambda: input("Research question: "))
 
     base_provider = OpenAICompatibleProvider(
-        api_key=settings.api_key, base_url=settings.base_url, model=settings.model
+        api_key=settings.api_key,
+        base_url=settings.base_url,
+        model=settings.model,
+        timeout=request_timeout(settings.budget.max_seconds, 60.0),
     )
     llm: LLMProvider = RetryingLLMProvider(base_provider, max_attempts=settings.max_llm_attempts)
     # Optional: reuse LLM responses for identical prompts across runs/iterations.

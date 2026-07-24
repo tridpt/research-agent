@@ -233,7 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     import time  # noqa: F401  (used indirectly by runners)
 
     from .cli import _build_search_and_fetch
-    from .config import resolve_settings
+    from .config import request_timeout, resolve_settings
     from .errors import ConfigError
     from .llm import OpenAICompatibleProvider
     from .retry import RetryingLLMProvider
@@ -252,7 +252,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     llm = RetryingLLMProvider(
-        OpenAICompatibleProvider(api_key=settings.api_key, base_url=settings.base_url, model=settings.model),
+        OpenAICompatibleProvider(
+            api_key=settings.api_key,
+            base_url=settings.base_url,
+            model=settings.model,
+            timeout=request_timeout(settings.budget.max_seconds, 60.0),
+        ),
         max_attempts=settings.max_llm_attempts,
     )
     search, fetch = _build_search_and_fetch(settings)

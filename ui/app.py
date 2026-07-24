@@ -40,7 +40,7 @@ from i18n import t  # noqa: E402
 
 from research_agent.agent import run_session  # noqa: E402
 from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
-from research_agent.config import resolve_settings  # noqa: E402
+from research_agent.config import request_timeout, resolve_settings  # noqa: E402
 from research_agent.error_diagnostics import diagnose_llm_error  # noqa: E402
 from research_agent.errors import ConfigError, LLMError  # noqa: E402
 from research_agent.evaluate import evaluate_report  # noqa: E402
@@ -440,7 +440,11 @@ def _build_search(settings):
 def _build_llm(settings, usage=None):
     llm = RetryingLLMProvider(
         OpenAICompatibleProvider(
-            api_key=settings.api_key, base_url=settings.base_url, model=settings.model, usage=usage
+            api_key=settings.api_key,
+            base_url=settings.base_url,
+            model=settings.model,
+            usage=usage,
+            timeout=request_timeout(settings.budget.max_seconds, 60.0),
         ),
         max_attempts=settings.max_llm_attempts,
     )
@@ -534,6 +538,7 @@ if run_clicked:
             HttpFetchTool(
                 blocked_domains=settings.blocked_domains,
                 per_source_char_limit=settings.per_source_char_limit,
+                timeout=request_timeout(settings.budget.max_seconds, 30.0),
             ),
             FetchCache(Path(".research_agent_cache"), ttl_seconds=settings.cache_ttl),
             url_validator=public_http_url_error,
@@ -874,6 +879,7 @@ def render_compare_tab() -> None:
                         HttpFetchTool(
                             blocked_domains=run_settings.blocked_domains,
                             per_source_char_limit=run_settings.per_source_char_limit,
+                            timeout=request_timeout(run_settings.budget.max_seconds, 30.0),
                         ),
                         FetchCache(Path(".research_agent_cache"), ttl_seconds=run_settings.cache_ttl),
                         url_validator=public_http_url_error,

@@ -49,6 +49,19 @@ def test_question_prompts_when_missing() -> None:
 
 
 # ---- Config (R8.1, R8.3, R9.1) ----
+def test_request_timeout_caps_and_floors() -> None:
+    from research_agent.config import request_timeout
+
+    # Normal budgets leave the per-call default unchanged.
+    assert request_timeout(180.0, 60.0) == 60.0
+    assert request_timeout(180.0, 30.0) == 30.0
+    # A tight budget caps the per-call timeout below the default.
+    assert request_timeout(10.0, 60.0) == 10.0
+    # A zero/negative budget never yields an "infinite" (0) timeout.
+    assert request_timeout(0.0, 60.0) == 1.0
+    assert request_timeout(-5.0, 30.0) == 1.0
+
+
 def test_config_reads_api_key_from_env() -> None:
     s = resolve_settings(env={ENV_API_KEY: "secret"}, cli_overrides={})
     assert s.api_key == "secret"

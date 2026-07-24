@@ -80,6 +80,16 @@ class Defaults:
 DEFAULTS = Defaults()
 
 
+def request_timeout(max_seconds: float, default: float) -> float:
+    """Cap a per-request I/O timeout so a single call cannot exceed the budget.
+
+    Returns ``min(default, max_seconds)`` but never below a 1s floor: a zero or
+    negative timeout would be treated as "no timeout" (infinite) by httpx, which
+    would defeat the hard deadline.
+    """
+    return max(1.0, min(default, max_seconds))
+
+
 def _resolve(key: str, cli: Mapping[str, object], env: Mapping[str, str]) -> object | None:
     """Highest-precedence provided value for an optional ``key`` (CLI > env)."""
     if key in cli and cli[key] is not None:
