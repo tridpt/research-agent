@@ -218,6 +218,13 @@ def run_session(
     allowed_pdf_paths = tuple(getattr(settings, "allowed_pdf_paths", ()))
     tool_schemas = _tool_schemas_for_session(allowed_pdf_paths)
 
+    # Hard deadline: make LLM retry backoff honor ``max_seconds`` using this
+    # session's own clock, so waits never push a run past its time budget.
+    deadline = state.started_at + budget.max_seconds
+    set_time_left = getattr(llm, "set_time_left", None)
+    if callable(set_time_left):
+        set_time_left(lambda: deadline - clock())
+
     while True:
         transition = decide_transition(state, budget, clock())
         if transition.kind is TransitionKind.SYNTHESIZE:

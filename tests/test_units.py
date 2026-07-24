@@ -308,6 +308,34 @@ def test_run_session_continues_on_empty_search() -> None:
     assert report.no_information is True  # no sources collected
 
 
+def test_run_session_wires_hard_deadline_into_retrying_provider() -> None:
+    # run_session should attach a remaining-time source using its own clock so
+    # LLM retry backoff can never wait past max_seconds.
+    from research_agent.retry import RetryingLLMProvider
+
+    inner = ScriptedLLM(decisions=[{"action": "finish"}])
+    provider = RetryingLLMProvider(inner, max_attempts=3, sleep=lambda _t: None)
+    settings = resolve_settings(
+        env={ENV_API_KEY: "k"},
+        cli_overrides={"max_rounds": 5, "max_sources": 5, "max_seconds": 100.0},
+    )
+    now = {"t": 0.0}
+    run_session(
+        question="q",
+        settings=settings,
+        llm=provider,
+        search=FakeSearch(SearchOutcome(results=())),
+        fetch=FakeFetch(),
+        synthesize_fn=synthesize,
+        clock=lambda: now["t"],
+        emit=lambda e: None,
+    )
+    assert provider._time_left is not None
+    # Deadline = started_at (0) + max_seconds (100); with the clock at t=40, 60s remain.
+    now["t"] = 40.0
+    assert provider._time_left() == 60.0
+
+
 def test_run_session_paces_with_delay() -> None:
     # With a configured round delay, the injectable sleep is called between rounds.
     sleeps: list[float] = []

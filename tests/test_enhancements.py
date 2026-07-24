@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from research_agent.agent import (
     count_distinct_domains,
     run_session,
@@ -10,6 +12,7 @@ from research_agent.agent import (
 )
 from research_agent.cache import CachingFetchTool, FetchCache, cache_key, is_fresh
 from research_agent.config import ENV_API_KEY, resolve_settings
+from research_agent.errors import LLMError
 from research_agent.fetch_tool import FetchOutcome
 from research_agent.llm import TransientLLMError, parse_retry_after
 from research_agent.models import SearchResult, Settings, Source
@@ -111,6 +114,43 @@ def test_call_with_retry_honors_retry_after() -> None:
     result = call_with_retry(fn, max_attempts=5, sleep=delays.append, base_delay=0.5)
     assert result == "ok"
     assert delays == [4.0, 4.0]  # both retries waited the server-provided hint
+
+
+def test_call_with_retry_clamps_sleep_to_remaining_deadline() -> None:
+    delays: list[float] = []
+
+    def fn():
+        raise TransientLLMError("rate limited", retry_after=30.0)
+
+    with pytest.raises(LLMError):
+        call_with_retry(
+            fn,
+            max_attempts=3,
+            sleep=delays.append,
+            base_delay=0.5,
+            time_left=lambda: 2.0,  # only 2s left; a 30s hint must be clamped
+        )
+    assert delays == [2.0, 2.0]
+
+
+def test_call_with_retry_stops_when_deadline_passed() -> None:
+    delays: list[float] = []
+    calls = {"n": 0}
+
+    def fn():
+        calls["n"] += 1
+        raise TransientLLMError("rate limited", retry_after=1.0)
+
+    with pytest.raises(LLMError):
+        call_with_retry(
+            fn,
+            max_attempts=5,
+            sleep=delays.append,
+            base_delay=0.5,
+            time_left=lambda: 0.0,  # no time left: do not retry, do not sleep
+        )
+    assert calls["n"] == 1
+    assert delays == []
 
 
 # ---------------------------------------------------------------------------

@@ -44,11 +44,16 @@ def call_with_retry(
     max_attempts: int,
     sleep: Callable[[float], None] = time.sleep,
     base_delay: float = 0.5,
+    time_left: Callable[[], float] | None = None,
 ) -> Any:
     """Invoke ``fn`` retrying only TransientLLMError, up to ``max_attempts`` calls.
 
     The first (failed) call is attempt #1. Honors a Retry-After hint carried by
     the error when present. Re-raises the last error once attempts are spent.
+
+    When ``time_left`` is provided it makes retries respect a hard deadline:
+    once no time remains we stop retrying, and every backoff sleep is clamped so
+    it never waits past the deadline.
     """
     if max_attempts < 1:
         max_attempts = 1
@@ -62,7 +67,13 @@ def call_with_retry(
             last_exc = exc
             if not should_retry(attempt, max_attempts):
                 break
-            sleep(next_delay(attempt, base_delay, getattr(exc, "retry_after", None)))
+            delay = next_delay(attempt, base_delay, getattr(exc, "retry_after", None))
+            if time_left is not None:
+                remaining = time_left()
+                if remaining <= 0:
+                    break
+                delay = min(delay, remaining)
+            sleep(delay)
     raise LLMError(
         f"LLM call failed after {max_attempts} attempt(s): {last_exc}"
     ) from last_exc
@@ -76,16 +87,27 @@ class RetryingLLMProvider:
         inner: LLMProvider,
         max_attempts: int,
         sleep: Callable[[float], None] = time.sleep,
+        time_left: Callable[[], float] | None = None,
     ) -> None:
         self._inner = inner
         self._max_attempts = max_attempts
         self._sleep = sleep
+        self._time_left = time_left
+
+    def set_time_left(self, time_left: Callable[[], float] | None) -> None:
+        """Attach a remaining-time source so retries honor a hard deadline.
+
+        Called by ``run_session`` with the session's own clock so backoff waits
+        never push a run past ``max_seconds``.
+        """
+        self._time_left = time_left
 
     def decide_action(self, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> RawDecision:
         return call_with_retry(
             lambda: self._inner.decide_action(messages, tools),
             self._max_attempts,
             self._sleep,
+            time_left=self._time_left,
         )
 
     def generate(self, messages: Sequence[Message]) -> str:
@@ -93,6 +115,7 @@ class RetryingLLMProvider:
             lambda: self._inner.generate(messages),
             self._max_attempts,
             self._sleep,
+            time_left=self._time_left,
         )
 
     def generate_stream(self, messages: Sequence[Message]) -> Iterator[str]:
@@ -118,5 +141,7 @@ class RetryingLLMProvider:
             yield from gen
 
         # Retry only the initial connection (until the first chunk).
-        stream = call_with_retry(_start, self._max_attempts, self._sleep)
+        stream = call_with_retry(
+            _start, self._max_attempts, self._sleep, time_left=self._time_left
+        )
         yield from stream
