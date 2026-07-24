@@ -6,6 +6,49 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **Web UI credential handling hardened**: server-managed API keys are never
+  pre-filled into a browser widget and their base URL is locked; personal LLM
+  and Tavily keys are kept only in the current Streamlit session and are no
+  longer written to `.env`. Adds an explicit "server managed" vs "personal API
+  key" mode.
+- **Custom LLM endpoints restricted in the web UI**: a custom base URL must use
+  HTTPS, carry no embedded credentials/query/fragment, and resolve to a host in
+  the built-in allowlist (Groq/Gemini/OpenAI) or the maintainer-configured
+  `RESEARCH_AGENT_ALLOWED_LLM_HOSTS`.
+- **Fetch response size cap**: sources are streamed and rejected once they
+  exceed a 5 MiB limit, preventing memory exhaustion from oversized responses.
+- **DNS-rebinding defense**: the fetch tool verifies the *actual* connected peer
+  IP (not just the pre-request DNS answer) and rejects private/loopback/reserved
+  addresses, closing a TOCTOU gap in the SSRF check.
+- **Robust LLM response handling**: malformed JSON or an invalid
+  OpenAI-compatible schema now raises `LLMError` instead of leaking
+  `JSONDecodeError`/`KeyError`/`IndexError` and crashing a session.
+- **Dependency updates**: bumped `pypdf` (6.14.2), `Pillow` (12.3.0), and
+  `GitPython` (3.1.55) to patched releases.
+- **Supply-chain automation**: added a `pip-audit` CI job that fails on known
+  vulnerabilities and a Dependabot config for weekly `uv` and GitHub Actions
+  updates.
+- **Hardened Docker image**: multi-stage build running as a non-root user, with
+  only runtime dependencies (no dev/test toolchain), a health check, and the
+  console script on `PATH`.
+
+### Changed
+
+- **`max_seconds` is now a hard deadline for LLM retries**: retry backoff never
+  waits past the remaining budget, and per-request LLM/fetch timeouts are capped
+  by `max_seconds` (never below a 1s floor).
+- **Web UI refactored for testability**: the credential/endpoint policy moved to
+  the pure module `ui/config_ui.py` and the trace-step renderer to `ui/steps.py`,
+  each covered by unit tests.
+
+### Added
+
+- **Visual theme** (`ui/theme.py`): a gradient hero banner, styled primary
+  buttons, pill-style tabs, and rounded source cards, with dark-mode contrast
+  fixes.
+
 ## [0.1.3] - 2026-07-09
 
 ### Changed
