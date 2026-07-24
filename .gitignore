@@ -17,3 +17,6 @@ report-*.md
 .research_agent_cache/
 .research_agent_history.json
 docs/screenshots/frames/
+
+# Ephemeral pip-audit export (generated in CI and local audits)
+requirements-audit.txt

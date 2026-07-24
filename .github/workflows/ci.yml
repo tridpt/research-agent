@@ -54,3 +54,20 @@ jobs:
 
       - name: Run tests (pytest + hypothesis) with coverage
         run: uv run --frozen pytest --cov=research_agent --cov-report=term-missing --cov-fail-under=80
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.12"
+          enable-cache: true
+
+      - name: Export the locked dependency set
+        run: uv export --frozen --all-extras --no-hashes --no-emit-project -o requirements-audit.txt
+
+      - name: Audit dependencies for known vulnerabilities (pip-audit)
+        run: uvx pip-audit -r requirements-audit.txt
