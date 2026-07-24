@@ -46,6 +46,7 @@ from helpers import (  # noqa: E402
 )
 from i18n import t  # noqa: E402
 from steps import render_step  # noqa: E402
+from theme import THEME_CSS, hero_html  # noqa: E402
 
 from research_agent.agent import run_session  # noqa: E402
 from research_agent.cache import CachingFetchTool, FetchCache  # noqa: E402
@@ -79,6 +80,23 @@ from research_agent.usage import UsageTracker, format_usage  # noqa: E402
 
 st.set_page_config(page_title="Research Agent", page_icon="🔎", layout="wide")
 UI_LANG = "en" if st.session_state.get("ui_lang") == "English" else "vi"
+
+# Apply the visual theme once, then render a decorative hero above the title.
+st.markdown(f"<style>{THEME_CSS}</style>", unsafe_allow_html=True)
+st.markdown(
+    hero_html(
+        title=t(UI_LANG, "app_title"),
+        subtitle=t(UI_LANG, "app_caption"),
+        badge=t(UI_LANG, "hero_badge"),
+        chips=[
+            t(UI_LANG, "hero_chip_search"),
+            t(UI_LANG, "hero_chip_read"),
+            t(UI_LANG, "hero_chip_cite"),
+            t(UI_LANG, "hero_chip_multi"),
+        ],
+    ),
+    unsafe_allow_html=True,
+)
 st.title(t(UI_LANG, "app_title"))
 st.caption(t(UI_LANG, "app_caption"))
 
